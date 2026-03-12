@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #f0f2f7;
+    --card: #ffffff;
+    --border: #e0e4ef;
+    --text: #0d1117;
+    --muted: #4a5568;
+    --dim: #7f8c9e;
+    --bg-rgb: 240 242 247;
+    --card-rgb: 255 255 255;
+    --border-rgb: 224 228 239;
+    --text-rgb: 13 17 23;
+    --muted-rgb: 74 85 104;
+    --dim-rgb: 127 140 158;
+  }
+
+  .dark {
+    --bg: #05080f;
+    --card: #0a0e1a;
+    --border: #1a2035;
+    --text: #e8eaf0;
+    --muted: #8892a4;
+    --dim: #3d4a5c;
+    --bg-rgb: 5 8 15;
+    --card-rgb: 10 14 26;
+    --border-rgb: 26 32 53;
+    --text-rgb: 232 234 240;
+    --muted-rgb: 136 146 164;
+    --dim-rgb: 61 74 92;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-rocket-bg text-rocket-text antialiased;
+    font-family:
+      system-ui,
+      -apple-system,
+      sans-serif;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-rocket-bg;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-rocket-dim rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-rocket-muted;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-rocket-gold/30 text-rocket-text;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
