@@ -40,6 +40,7 @@ interface AuctionRow {
 }
 
 type FilterTab = "all" | "active" | "upcoming" | "closed";
+const AUCTION_WIN_BONUS = 25;
 
 function TimeRemaining({
   endTime,
@@ -162,12 +163,64 @@ export default function AdminAuctions() {
       return;
     }
 
-    // 3. Insert credit_transaction for winner
+    // 3. Apply credit mining winner bonus (+25 credits)
+    const { data: winnerProfile, error: winnerProfileError } = await supabase
+      .from("profiles")
+      .select("credits")
+      .eq("id", topBid.bidder_id)
+      .single();
+
+    if (winnerProfileError || !winnerProfile) {
+      addToast("Auction closed but failed to fetch winner profile", "error");
+      setDeclaring(null);
+      fetchAuctions();
+      return;
+    }
+
+    const { error: winnerCreditError } = await supabase
+      .from("profiles")
+      .update({ credits: (winnerProfile.credits ?? 0) + AUCTION_WIN_BONUS })
+      .eq("id", topBid.bidder_id);
+
+    if (winnerCreditError) {
+      addToast("Auction closed but failed to apply winner bonus", "error");
+      setDeclaring(null);
+      fetchAuctions();
+      return;
+    }
+
+    const { error: winnerMiningTxError } = await supabase
+      .from("credit_transactions")
+      .insert({
+        user_id: topBid.bidder_id,
+        amount: AUCTION_WIN_BONUS,
+        type: "mining",
+        auction_id: auctionId,
+        note: "Auction win bonus",
+      });
+
+    if (winnerMiningTxError) {
+      // Best-effort rollback if mining transaction insert fails.
+      await supabase
+        .from("profiles")
+        .update({ credits: winnerProfile.credits ?? 0 })
+        .eq("id", topBid.bidder_id);
+
+      addToast(
+        "Auction closed but failed to record winner mining bonus",
+        "error",
+      );
+      setDeclaring(null);
+      fetchAuctions();
+      return;
+    }
+
+    // 4. Insert winner transaction record (bid deduction already handled while bidding)
     const { error: txError } = await supabase
       .from("credit_transactions")
       .insert({
         user_id: topBid.bidder_id,
-        amount: topBid.amount,
+        amount: 0,
         type: "winner_deduct",
         auction_id: auctionId,
         note: "Won auction — credits deducted",

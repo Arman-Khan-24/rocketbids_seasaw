@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
+const AUCTION_WIN_BONUS = 25;
+
 export async function POST(request: NextRequest) {
   const supabase = createClient();
   const {
@@ -82,6 +84,57 @@ export async function POST(request: NextRequest) {
   // If there's a winner, the credits are already deducted via the bid
   // Log a winner_deduct transaction for the final winning bid
   if (auction.current_winner_id && auction.current_bid > 0) {
+    const { data: winnerProfile, error: winnerProfileError } = await serviceClient
+      .from("profiles")
+      .select("credits")
+      .eq("id", auction.current_winner_id)
+      .single();
+
+    if (winnerProfileError || !winnerProfile) {
+      return NextResponse.json(
+        { error: "Auction closed but failed to fetch winner profile for bonus" },
+        { status: 500 },
+      );
+    }
+
+    const winnerCurrentCredits = winnerProfile.credits ?? 0;
+    const winnerBonusCredits = winnerCurrentCredits + AUCTION_WIN_BONUS;
+
+    const { error: winnerBonusError } = await serviceClient
+      .from("profiles")
+      .update({ credits: winnerBonusCredits })
+      .eq("id", auction.current_winner_id);
+
+    if (winnerBonusError) {
+      return NextResponse.json(
+        { error: "Auction closed but failed to apply winner bonus" },
+        { status: 500 },
+      );
+    }
+
+    const { error: winnerBonusTxError } = await serviceClient
+      .from("credit_transactions")
+      .insert({
+        user_id: auction.current_winner_id,
+        amount: AUCTION_WIN_BONUS,
+        type: "mining",
+        auction_id,
+        note: "Auction win bonus",
+      });
+
+    if (winnerBonusTxError) {
+      // Best-effort rollback for consistency if tx log fails.
+      await serviceClient
+        .from("profiles")
+        .update({ credits: winnerCurrentCredits })
+        .eq("id", auction.current_winner_id);
+
+      return NextResponse.json(
+        { error: "Auction closed but failed to log winner bonus" },
+        { status: 500 },
+      );
+    }
+
     await serviceClient.from("credit_transactions").insert({
       user_id: auction.current_winner_id,
       amount: 0, // Already deducted during bidding

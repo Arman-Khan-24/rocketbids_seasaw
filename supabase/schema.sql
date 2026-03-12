@@ -12,6 +12,7 @@ create table public.profiles (
   full_name text not null,
   role text not null default 'bidder' check (role in ('admin', 'bidder')),
   credits integer not null default 0,
+  last_login_bonus_date date,
   created_at timestamptz not null default now()
 );
 
@@ -136,7 +137,7 @@ create table public.credit_transactions (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.profiles(id) not null,
   amount integer not null,
-  type text not null check (type in ('assign', 'bid_deduct', 'bid_refund', 'winner_deduct')),
+  type text not null check (type in ('assign', 'bid_deduct', 'bid_refund', 'winner_deduct', 'mining')),
   auction_id uuid references public.auctions(id),
   note text,
   created_at timestamptz not null default now()

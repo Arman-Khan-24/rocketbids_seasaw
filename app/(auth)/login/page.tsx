@@ -41,6 +41,15 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const applyDailyLoginBonus = useCallback(async () => {
+    try {
+      await fetch("/api/mining/daily-login", { method: "POST" });
+    } catch (bonusError) {
+      // Non-critical: login should still proceed even if bonus call fails.
+      console.warn("Daily login bonus call failed", bonusError);
+    }
+  }, []);
+
   const getOrCreateProfileRole = useCallback(
     async (user: User) => {
       const fallbackRole = resolveRole(user.user_metadata?.role);
@@ -145,6 +154,11 @@ export default function LoginPage() {
       }
 
       const role = await getOrCreateProfileRole(user);
+
+      if (role === "bidder") {
+        await applyDailyLoginBonus();
+      }
+
       router.replace(role === "admin" ? "/admin/dashboard" : "/bidder/browse");
       router.refresh();
     } catch (e) {

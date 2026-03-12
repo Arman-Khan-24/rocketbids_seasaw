@@ -30,11 +30,22 @@ interface AuctionReport {
   end_time: string;
 }
 
+interface BidPulsePoint {
+  hour: string;
+  bids: number;
+}
+
+interface BidTimestamp {
+  created_at: string;
+}
+
 export default function AdminReports() {
   const [closedAuctions, setClosedAuctions] = useState<AuctionReport[]>([]);
   const [statusData, setStatusData] = useState<
     { name: string; value: number }[]
   >([]);
+  const [bidPulseData, setBidPulseData] = useState<BidPulsePoint[]>([]);
+  const [hasBidPulseBids, setHasBidPulseBids] = useState(false);
   const [creditFlow, setCreditFlow] = useState<
     { date: string; assigned: number; deducted: number }[]
   >([]);
@@ -52,18 +63,32 @@ export default function AdminReports() {
         // Non-critical
       }
 
-      const [auctionsRes, bidsRes, creditsRes] = await Promise.all([
-        supabase.from("auctions").select("*"),
-        supabase.from("bids").select("auction_id"),
-        supabase
-          .from("credit_transactions")
-          .select("*")
-          .order("created_at", { ascending: true }),
-      ]);
+      const now = new Date();
+      const pulseStart = new Date(now);
+      pulseStart.setMinutes(0, 0, 0);
+      pulseStart.setHours(pulseStart.getHours() - 23);
+      const pulseEnd = new Date(pulseStart.getTime() + 24 * 60 * 60 * 1000);
+
+      const [auctionsRes, bidsRes, creditsRes, pulseBidsRes] =
+        await Promise.all([
+          supabase.from("auctions").select("*"),
+          supabase.from("bids").select("auction_id"),
+          supabase
+            .from("credit_transactions")
+            .select("*")
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("bids")
+            .select("created_at")
+            .gte("created_at", pulseStart.toISOString())
+            .lt("created_at", pulseEnd.toISOString())
+            .order("created_at", { ascending: true }),
+        ]);
 
       const auctions = auctionsRes.data ?? [];
       const bids = bidsRes.data ?? [];
       const credits = creditsRes.data ?? [];
+      const pulseBids = (pulseBidsRes.data as BidTimestamp[]) ?? [];
 
       // Bid counts per auction
       const bidCounts: Record<string, number> = {};
@@ -108,7 +133,7 @@ export default function AdminReports() {
           day: "numeric",
         });
         if (!flowByDay[day]) flowByDay[day] = { assigned: 0, deducted: 0 };
-        if (c.type === "assign") {
+        if (c.type === "assign" || c.type === "mining") {
           flowByDay[day].assigned += c.amount;
           assigned += c.amount;
         } else {
@@ -124,6 +149,43 @@ export default function AdminReports() {
       );
       setTotalCreditsAssigned(assigned);
       setTotalCreditsDeducted(deducted);
+
+      // Bid pulse for the last 24 hours (hourly buckets)
+      const buckets = Array.from({ length: 24 }, (_, index) => {
+        const bucketTime = new Date(
+          pulseStart.getTime() + index * 60 * 60 * 1000,
+        );
+        return {
+          bucketIso: bucketTime.toISOString(),
+          hour: bucketTime.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          bids: 0,
+        };
+      });
+
+      const bucketIndexByIso: Record<string, number> = {};
+      buckets.forEach((bucket, index) => {
+        bucketIndexByIso[bucket.bucketIso] = index;
+      });
+
+      pulseBids.forEach((bid) => {
+        const hourStart = new Date(bid.created_at);
+        hourStart.setMinutes(0, 0, 0);
+        const index = bucketIndexByIso[hourStart.toISOString()];
+        if (index !== undefined) {
+          buckets[index].bids += 1;
+        }
+      });
+
+      setBidPulseData(
+        buckets.map(({ hour, bids: bidCount }) => ({
+          hour,
+          bids: bidCount,
+        })),
+      );
+      setHasBidPulseBids(pulseBids.length > 0);
 
       setLoading(false);
     }
@@ -263,6 +325,72 @@ export default function AdminReports() {
           )}
         </motion.div>
       </div>
+
+      {/* Bid Pulse Graph */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="rounded-xl border border-rocket-border bg-rocket-card p-5"
+      >
+        <h2 className="font-display text-base font-semibold text-rocket-text mb-4">
+          Bid Pulse Graph (Last 24 Hours)
+        </h2>
+
+        {hasBidPulseBids ? (
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={bidPulseData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" />
+              <XAxis
+                dataKey="hour"
+                stroke="#8892a4"
+                fontSize={12}
+                tickMargin={8}
+                label={{
+                  value: "Hour",
+                  position: "insideBottom",
+                  offset: -4,
+                  fill: "#8892a4",
+                  fontSize: 12,
+                }}
+              />
+              <YAxis
+                stroke="#8892a4"
+                fontSize={12}
+                allowDecimals={false}
+                label={{
+                  value: "Number of Bids",
+                  angle: -90,
+                  position: "insideLeft",
+                  fill: "#8892a4",
+                  fontSize: 12,
+                }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#0a0e1a",
+                  border: "1px solid #1a2035",
+                  borderRadius: "8px",
+                  color: "#e8eaf0",
+                  fontSize: "12px",
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="bids"
+                stroke="#f0a500"
+                strokeWidth={2.5}
+                dot={{ r: 2, fill: "#f0a500" }}
+                activeDot={{ r: 5 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-center py-12 text-rocket-muted text-sm">
+            No bids yet in the last 24 hours
+          </p>
+        )}
+      </motion.div>
 
       {/* Closed Auction Results */}
       <motion.div

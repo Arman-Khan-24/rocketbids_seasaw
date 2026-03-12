@@ -5,6 +5,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 // Anti-Snipe: if bid is placed within the last 60 seconds, extend end_time by 30 seconds
 const ANTI_SNIPE_WINDOW_MS = 60_000;
 const ANTI_SNIPE_EXTENSION_MS = 30_000;
+const BID_ACTIVITY_BONUS = 2;
 
 export async function POST(request: NextRequest) {
   const supabase = createClient();
@@ -157,6 +158,48 @@ export async function POST(request: NextRequest) {
     .from("auctions")
     .update(updateData)
     .eq("id", auction_id);
+
+  // Credit Mining: +2 credits for successful bid activity
+  const { data: bonusProfile, error: bonusProfileError } = await serviceClient
+    .from("profiles")
+    .select("credits")
+    .eq("id", user.id)
+    .single();
+
+  if (bonusProfileError || !bonusProfile) {
+    console.error("Failed to fetch profile for bid activity bonus", bonusProfileError);
+  } else {
+    const currentCredits = bonusProfile.credits ?? 0;
+    const bonusCredits = currentCredits + BID_ACTIVITY_BONUS;
+
+    const { error: bonusUpdateError } = await serviceClient
+      .from("profiles")
+      .update({ credits: bonusCredits })
+      .eq("id", user.id);
+
+    if (bonusUpdateError) {
+      console.error("Failed to apply bid activity bonus", bonusUpdateError);
+    } else {
+      const { error: bonusTxError } = await serviceClient
+        .from("credit_transactions")
+        .insert({
+          user_id: user.id,
+          amount: BID_ACTIVITY_BONUS,
+          type: "mining",
+          auction_id,
+          note: "Bid activity bonus",
+        });
+
+      if (bonusTxError) {
+        // Best-effort rollback for consistency if tx log fails.
+        await serviceClient
+          .from("profiles")
+          .update({ credits: currentCredits })
+          .eq("id", user.id);
+        console.error("Failed to log bid activity bonus", bonusTxError);
+      }
+    }
+  }
 
   return NextResponse.json({ success: true, amount });
 }

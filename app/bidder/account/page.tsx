@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Coins, CreditCard, Gavel, UserCircle } from "lucide-react";
+import { Coins, CreditCard, Gavel, UserCircle, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/Badge";
 import { formatDate, formatCredits } from "@/lib/utils";
@@ -547,6 +547,7 @@ export default function BidderAccountPage() {
                         <td className="px-4 py-3">
                           {meta.variant === "purple" ? (
                             <span className="inline-flex items-center rounded-full border border-purple-500/30 bg-purple-500/15 px-2.5 py-0.5 text-xs font-medium text-purple-400 capitalize">
+                              <Zap size={12} className="mr-1" />
                               {meta.label}
                             </span>
                           ) : (
