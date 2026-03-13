@@ -40,7 +40,6 @@ interface AuctionRow {
 }
 
 type FilterTab = "all" | "active" | "upcoming" | "closed";
-const AUCTION_WIN_BONUS = 25;
 
 function TimeRemaining({
   endTime,
@@ -132,108 +131,25 @@ export default function AdminAuctions() {
   async function declareWinner(auctionId: string) {
     setDeclaring(auctionId);
 
-    // 1. Find highest bid
-    const { data: topBid, error: bidError } = await supabase
-      .from("bids")
-      .select("*")
-      .eq("auction_id", auctionId)
-      .order("amount", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (bidError || !topBid) {
-      addToast("No bids found for this auction", "error");
-      setDeclaring(null);
-      return;
-    }
-
-    // 2. Set auction status = closed, set current_winner_id
-    const { error: updateError } = await supabase
-      .from("auctions")
-      .update({
-        status: "closed",
-        current_winner_id: topBid.bidder_id,
-        current_bid: topBid.amount,
-      })
-      .eq("id", auctionId);
-
-    if (updateError) {
-      addToast("Failed to close auction", "error");
-      setDeclaring(null);
-      return;
-    }
-
-    // 3. Apply credit mining winner bonus (+25 credits)
-    const { data: winnerProfile, error: winnerProfileError } = await supabase
-      .from("profiles")
-      .select("credits")
-      .eq("id", topBid.bidder_id)
-      .single();
-
-    if (winnerProfileError || !winnerProfile) {
-      addToast("Auction closed but failed to fetch winner profile", "error");
-      setDeclaring(null);
-      fetchAuctions();
-      return;
-    }
-
-    const { error: winnerCreditError } = await supabase
-      .from("profiles")
-      .update({ credits: (winnerProfile.credits ?? 0) + AUCTION_WIN_BONUS })
-      .eq("id", topBid.bidder_id);
-
-    if (winnerCreditError) {
-      addToast("Auction closed but failed to apply winner bonus", "error");
-      setDeclaring(null);
-      fetchAuctions();
-      return;
-    }
-
-    const { error: winnerMiningTxError } = await supabase
-      .from("credit_transactions")
-      .insert({
-        user_id: topBid.bidder_id,
-        amount: AUCTION_WIN_BONUS,
-        type: "mining",
-        auction_id: auctionId,
-        note: "Auction win bonus",
+    try {
+      const res = await fetch("/api/winners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auction_id: auctionId }),
       });
 
-    if (winnerMiningTxError) {
-      // Best-effort rollback if mining transaction insert fails.
-      await supabase
-        .from("profiles")
-        .update({ credits: winnerProfile.credits ?? 0 })
-        .eq("id", topBid.bidder_id);
-
-      addToast(
-        "Auction closed but failed to record winner mining bonus",
-        "error",
-      );
+      const data = await res.json();
+      if (!res.ok) {
+        addToast(data.error || "Failed to declare winner", "error");
+      } else {
+        addToast("Winner declared!", "success");
+      }
+    } catch {
+      addToast("Failed to declare winner", "error");
+    } finally {
       setDeclaring(null);
       fetchAuctions();
-      return;
     }
-
-    // 4. Insert winner transaction record (bid deduction already handled while bidding)
-    const { error: txError } = await supabase
-      .from("credit_transactions")
-      .insert({
-        user_id: topBid.bidder_id,
-        amount: 0,
-        type: "winner_deduct",
-        auction_id: auctionId,
-        note: "Won auction — credits deducted",
-      });
-
-    if (txError) {
-      addToast("Auction closed but failed to record transaction", "error");
-    } else {
-      addToast("Winner declared!", "success");
-    }
-
-    setDeclaring(null);
-    fetchAuctions();
   }
 
   async function deleteAuction(id: string) {

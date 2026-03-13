@@ -15,8 +15,9 @@ interface BidHistoryItem {
   amount: number;
   created_at: string;
   auction_title: string;
-  auction_status: string;
-  is_winning: boolean;
+  auction_status: "active" | "closed" | "upcoming" | "unknown";
+  current_winner_id: string | null;
+  current_bid: number;
 }
 
 interface CreditTransaction {
@@ -25,6 +26,30 @@ interface CreditTransaction {
   type: string;
   note: string | null;
   created_at: string;
+}
+
+type BidBadgeVariant = "teal" | "danger" | "gold" | "muted";
+
+function getBidStatus(
+  bid: BidHistoryItem,
+  profileId: string,
+): { label: string; variant: BidBadgeVariant } {
+  const isExactWinningBid =
+    bid.current_winner_id === profileId && bid.amount === bid.current_bid;
+
+  if (bid.auction_status === "closed") {
+    return isExactWinningBid
+      ? { label: "Won", variant: "teal" }
+      : { label: "Lost", variant: "muted" };
+  }
+
+  if (bid.auction_status === "active") {
+    return isExactWinningBid
+      ? { label: "Winning", variant: "teal" }
+      : { label: "Outbid", variant: "danger" };
+  }
+
+  return { label: "Upcoming", variant: "gold" };
 }
 
 export default function BidHistory() {
@@ -47,7 +72,7 @@ export default function BidHistory() {
           .order("created_at", { ascending: false }),
         supabase
           .from("auctions")
-          .select("id, title, status, current_winner_id"),
+          .select("id, title, status, current_winner_id, current_bid"),
         supabase
           .from("credit_transactions")
           .select("*")
@@ -57,13 +82,19 @@ export default function BidHistory() {
 
       const auctionMap: Record<
         string,
-        { title: string; status: string; current_winner_id: string | null }
+        {
+          title: string;
+          status: "active" | "closed" | "upcoming";
+          current_winner_id: string | null;
+          current_bid: number;
+        }
       > = {};
       (auctionsRes.data ?? []).forEach((a) => {
         auctionMap[a.id] = {
           title: a.title,
-          status: a.status,
+          status: a.status as "active" | "closed" | "upcoming",
           current_winner_id: a.current_winner_id,
+          current_bid: a.current_bid ?? 0,
         };
       });
 
@@ -74,7 +105,8 @@ export default function BidHistory() {
         created_at: bid.created_at,
         auction_title: auctionMap[bid.auction_id]?.title ?? "Unknown Auction",
         auction_status: auctionMap[bid.auction_id]?.status ?? "unknown",
-        is_winning: auctionMap[bid.auction_id]?.current_winner_id === user!.id,
+        current_winner_id: auctionMap[bid.auction_id]?.current_winner_id ?? null,
+        current_bid: auctionMap[bid.auction_id]?.current_bid ?? 0,
       }));
 
       setBids(bidHistory);
@@ -92,8 +124,8 @@ export default function BidHistory() {
     { label: string; color: "teal" | "danger" | "gold" | "muted" }
   > = {
     assign: { label: "Assigned", color: "teal" },
-    bid_deduct: { label: "Bid Placed", color: "danger" },
-    bid_refund: { label: "Refund (Outbid)", color: "teal" },
+    bid_deduct: { label: "Credits Reserved", color: "gold" },
+    bid_refund: { label: "Reservation Released", color: "teal" },
     winner_deduct: { label: "Winner Deduction", color: "gold" },
   };
 
@@ -161,13 +193,12 @@ export default function BidHistory() {
                   <span className="font-mono text-sm font-semibold text-rocket-gold">
                     {bid.amount} cr
                   </span>
-                  {bid.is_winning ? (
-                    <Badge variant="teal">Winning</Badge>
-                  ) : bid.auction_status === "closed" ? (
-                    <Badge variant="muted">Lost</Badge>
-                  ) : (
-                    <Badge variant="gold">Active</Badge>
-                  )}
+                  {(() => {
+                    const bidStatus = getBidStatus(bid, user?.id ?? "");
+                    return (
+                      <Badge variant={bidStatus.variant}>{bidStatus.label}</Badge>
+                    );
+                  })()}
                 </div>
               </motion.div>
             ))

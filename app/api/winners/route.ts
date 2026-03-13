@@ -1,8 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-
-const AUCTION_WIN_BONUS = 25;
+import { settleAuctionCredits } from "@/lib/server/auctionSettlement";
 
 export async function POST(request: NextRequest) {
   const supabase = createClient();
@@ -76,72 +75,37 @@ export async function POST(request: NextRequest) {
   }
 
   // Close the auction
-  await serviceClient
+  const { error: closeError } = await serviceClient
     .from("auctions")
     .update({ status: "closed" })
     .eq("id", auction_id);
 
-  // If there's a winner, the credits are already deducted via the bid
-  // Log a winner_deduct transaction for the final winning bid
+  if (closeError) {
+    return NextResponse.json(
+      { error: "Failed to close auction" },
+      { status: 500 },
+    );
+  }
+
   if (auction.current_winner_id && auction.current_bid > 0) {
-    const { data: winnerProfile, error: winnerProfileError } = await serviceClient
-      .from("profiles")
-      .select("credits")
-      .eq("id", auction.current_winner_id)
-      .single();
-
-    if (winnerProfileError || !winnerProfile) {
-      return NextResponse.json(
-        { error: "Auction closed but failed to fetch winner profile for bonus" },
-        { status: 500 },
-      );
-    }
-
-    const winnerCurrentCredits = winnerProfile.credits ?? 0;
-    const winnerBonusCredits = winnerCurrentCredits + AUCTION_WIN_BONUS;
-
-    const { error: winnerBonusError } = await serviceClient
-      .from("profiles")
-      .update({ credits: winnerBonusCredits })
-      .eq("id", auction.current_winner_id);
-
-    if (winnerBonusError) {
-      return NextResponse.json(
-        { error: "Auction closed but failed to apply winner bonus" },
-        { status: 500 },
-      );
-    }
-
-    const { error: winnerBonusTxError } = await serviceClient
-      .from("credit_transactions")
-      .insert({
-        user_id: auction.current_winner_id,
-        amount: AUCTION_WIN_BONUS,
-        type: "mining",
-        auction_id,
-        note: "Auction win bonus",
+    try {
+      await settleAuctionCredits(serviceClient, {
+        id: auction.id,
+        title: auction.title,
+        current_winner_id: auction.current_winner_id,
+        current_bid: auction.current_bid,
       });
-
-    if (winnerBonusTxError) {
-      // Best-effort rollback for consistency if tx log fails.
-      await serviceClient
-        .from("profiles")
-        .update({ credits: winnerCurrentCredits })
-        .eq("id", auction.current_winner_id);
-
+    } catch (settleError) {
       return NextResponse.json(
-        { error: "Auction closed but failed to log winner bonus" },
+        {
+          error:
+            settleError instanceof Error
+              ? settleError.message
+              : "Auction closed but failed to settle credits",
+        },
         { status: 500 },
       );
     }
-
-    await serviceClient.from("credit_transactions").insert({
-      user_id: auction.current_winner_id,
-      amount: 0, // Already deducted during bidding
-      type: "winner_deduct",
-      auction_id,
-      note: `Won auction "${auction.title}" with bid of ${auction.current_bid} credits`,
-    });
 
     return NextResponse.json({
       success: true,
@@ -149,6 +113,26 @@ export async function POST(request: NextRequest) {
       winning_bid: auction.current_bid,
       title: auction.title,
     });
+  }
+
+  // Ensure any stale reservations are released if auction closes with no winner.
+  try {
+    await settleAuctionCredits(serviceClient, {
+      id: auction.id,
+      title: auction.title,
+      current_winner_id: null,
+      current_bid: 0,
+    });
+  } catch (settleError) {
+    return NextResponse.json(
+      {
+        error:
+          settleError instanceof Error
+            ? settleError.message
+            : "Auction closed but failed to release reservations",
+      },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({

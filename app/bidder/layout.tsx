@@ -21,6 +21,7 @@ interface Profile {
   full_name: string | null;
   role: "admin" | "bidder";
   credits: number;
+  reserved_credits: number;
 }
 
 function resolveRole(value: unknown): "admin" | "bidder" {
@@ -56,7 +57,7 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("id, full_name, role, credits")
+        .select("id, full_name, role, credits, reserved_credits")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -90,6 +91,10 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
           role: "bidder",
           credits:
             typeof profileData?.credits === "number" ? profileData.credits : 0,
+          reserved_credits:
+            typeof profileData?.reserved_credits === "number"
+              ? profileData.reserved_credits
+              : 0,
         });
         setChecking(false);
       }
@@ -126,6 +131,10 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
                 typeof updated.credits === "number"
                   ? updated.credits
                   : current.credits,
+              reserved_credits:
+                typeof updated.reserved_credits === "number"
+                  ? updated.reserved_credits
+                  : current.reserved_credits,
               full_name:
                 typeof updated.full_name === "string"
                   ? updated.full_name
@@ -199,10 +208,13 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
 
           <div className="space-y-2 border-t border-rocket-border pt-4">
             <div className="rounded-lg border border-rocket-border bg-rocket-bg px-3 py-2">
-              <p className="text-xs text-rocket-muted">Credit Balance</p>
+              <p className="text-xs text-rocket-muted">Available Credits</p>
               <p className="mt-0.5 flex items-center gap-1.5 font-mono text-sm font-semibold text-rocket-gold">
                 <Coins size={13} />
                 {formatCredits(profile?.credits ?? 0)} cr
+              </p>
+              <p className="mt-1 text-[11px] text-rocket-dim">
+                On hold: {formatCredits(profile?.reserved_credits ?? 0)} cr
               </p>
             </div>
 

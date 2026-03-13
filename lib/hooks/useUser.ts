@@ -9,6 +9,7 @@ export interface Profile {
   full_name: string;
   role: "admin" | "bidder";
   credits: number;
+  reserved_credits: number;
   created_at: string;
 }
 

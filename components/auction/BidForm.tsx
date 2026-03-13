@@ -103,6 +103,19 @@ export function BidForm({
         </div>
       )}
 
+      <div className="flex gap-2">
+        {[100, 250, 500, 1000].map((inc) => (
+          <button
+            key={inc}
+            type="button"
+            onClick={() => setAmount(String(minimumAmount + inc))}
+            className="flex-1 rounded-lg border border-rocket-border bg-rocket-bg py-1.5 text-xs font-mono text-rocket-muted hover:border-rocket-gold hover:text-rocket-gold transition-colors"
+          >
+            +{inc}
+          </button>
+        ))}
+      </div>
+
       <div className="flex gap-3">
         <Input
           type="number"
@@ -123,12 +136,20 @@ export function BidForm({
         </Button>
       </div>
 
-      <p className="text-xs text-rocket-muted">
-        Your balance:{" "}
-        <span className="font-mono text-rocket-gold">
-          {profile?.credits ?? 0} cr
-        </span>
-      </p>
+      <div className="space-y-1 text-xs text-rocket-muted">
+        <p>
+          Available:{" "}
+          <span className="font-mono text-rocket-gold">
+            {profile?.credits ?? 0} cr
+          </span>
+        </p>
+        <p>
+          On hold:{" "}
+          <span className="font-mono text-rocket-dim">
+            {profile?.reserved_credits ?? 0} cr
+          </span>
+        </p>
+      </div>
     </motion.form>
   );
 }

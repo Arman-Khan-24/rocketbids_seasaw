@@ -15,6 +15,7 @@ interface Profile {
   email: string | null;
   role: "admin" | "bidder";
   credits: number | null;
+  reserved_credits: number | null;
   created_at: string;
 }
 
@@ -22,6 +23,7 @@ interface AuctionSummary {
   title: string | null;
   status: "active" | "closed" | "upcoming" | null;
   current_winner_id: string | null;
+  current_bid: number;
 }
 
 interface BidRecord {
@@ -88,21 +90,20 @@ function AccountSkeleton() {
 
 function getBidStatus(bid: BidRecord, profileId: string): BidStatus {
   const auction = bid.auctions;
+  const isExactWinningBid =
+    auction?.current_winner_id === profileId &&
+    bid.amount === (auction?.current_bid ?? -1);
 
-  if (auction?.status === "closed" && auction.current_winner_id === profileId) {
-    return { label: "won", variant: "teal" };
+  if (auction?.status === "closed") {
+    return isExactWinningBid
+      ? { label: "won", variant: "teal" }
+      : { label: "lost", variant: "muted" };
   }
 
-  if (auction?.status === "closed" && auction.current_winner_id !== profileId) {
-    return { label: "lost", variant: "muted" };
-  }
-
-  if (auction?.status === "active" && auction.current_winner_id === profileId) {
-    return { label: "winning", variant: "teal" };
-  }
-
-  if (auction?.status === "active" && auction.current_winner_id !== profileId) {
-    return { label: "outbid", variant: "danger" };
+  if (auction?.status === "active") {
+    return isExactWinningBid
+      ? { label: "winning", variant: "teal" }
+      : { label: "outbid", variant: "danger" };
   }
 
   return { label: "upcoming", variant: "gold" };
@@ -120,11 +121,16 @@ function getTransactionMeta(rawType: string): TxMeta {
     };
   }
 
-  if (
-    type === "deducted" ||
-    type === "bid_deduct" ||
-    type === "winner_deduct"
-  ) {
+  if (type === "bid_deduct") {
+    return {
+      label: "reserved",
+      variant: "gold",
+      prefix: "-",
+      amountClass: "text-rocket-gold",
+    };
+  }
+
+  if (type === "winner_deduct" || type === "deducted") {
     return {
       label: "deducted",
       variant: "danger",
@@ -133,7 +139,16 @@ function getTransactionMeta(rawType: string): TxMeta {
     };
   }
 
-  if (type === "returned" || type === "bid_refund") {
+  if (type === "bid_refund") {
+    return {
+      label: "released",
+      variant: "teal",
+      prefix: "+",
+      amountClass: "text-rocket-teal",
+    };
+  }
+
+  if (type === "returned") {
     return {
       label: "returned",
       variant: "gold",
@@ -217,7 +232,8 @@ export default function BidderAccountPage() {
             auctions (
               title,
               status,
-              current_winner_id
+              current_winner_id,
+              current_bid
             )
           `,
           )
@@ -332,10 +348,13 @@ export default function BidderAccountPage() {
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-rocket-border bg-rocket-bg px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-rocket-muted">
-              Credits
+              Available Credits
             </p>
             <p className="mt-1 font-mono text-lg font-semibold text-rocket-gold">
               {formatCredits(profile.credits ?? 0)}
+            </p>
+            <p className="mt-1 text-xs text-rocket-dim">
+              On hold: {formatCredits(profile.reserved_credits ?? 0)} cr
             </p>
           </div>
 

@@ -58,6 +58,18 @@ function AuctionDetail({
         Back to Browse
       </Link>
 
+      {isWarMode && (
+        <motion.div
+          key="war-banner"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          className="flex items-center justify-center gap-2 rounded-xl border border-rocket-danger/60 bg-rocket-danger/10 py-3 text-base font-bold text-rocket-danger animate-pulse"
+        >
+          🔥 Bidding War Active 🔥
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">

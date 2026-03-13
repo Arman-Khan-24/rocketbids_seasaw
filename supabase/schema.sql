@@ -12,6 +12,7 @@ create table public.profiles (
   full_name text not null,
   role text not null default 'bidder' check (role in ('admin', 'bidder')),
   credits integer not null default 0,
+  reserved_credits integer not null default 0,
   last_login_bonus_date date,
   created_at timestamptz not null default now()
 );
@@ -131,6 +132,46 @@ create policy "Bidders can insert own bids"
   with check (auth.uid() = bidder_id);
 
 -- ============================================================
+-- TABLE: credit_reservations
+-- ============================================================
+create table public.credit_reservations (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.profiles(id) not null,
+  auction_id uuid references public.auctions(id) on delete cascade not null,
+  amount integer not null check (amount > 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, auction_id)
+);
+
+alter table public.credit_reservations enable row level security;
+
+-- Admin can read all reservations
+create policy "Admin can read all credit_reservations"
+  on public.credit_reservations for select
+  using (public.is_admin());
+
+-- Users can read their own reservations
+create policy "Users can read own credit_reservations"
+  on public.credit_reservations for select
+  using (auth.uid() = user_id);
+
+-- Admin can insert reservations
+create policy "Admin can insert credit_reservations"
+  on public.credit_reservations for insert
+  with check (public.is_admin());
+
+-- Admin can update reservations
+create policy "Admin can update credit_reservations"
+  on public.credit_reservations for update
+  using (public.is_admin());
+
+-- Admin can delete reservations
+create policy "Admin can delete credit_reservations"
+  on public.credit_reservations for delete
+  using (public.is_admin());
+
+-- ============================================================
 -- TABLE: credit_transactions
 -- ============================================================
 create table public.credit_transactions (
@@ -200,3 +241,5 @@ create index idx_bids_created_at on public.bids(created_at desc);
 create index idx_auctions_status on public.auctions(status);
 create index idx_auctions_end_time on public.auctions(end_time);
 create index idx_credit_transactions_user_id on public.credit_transactions(user_id);
+create index idx_credit_reservations_user_id on public.credit_reservations(user_id);
+create index idx_credit_reservations_auction_id on public.credit_reservations(auction_id);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { settleAuctionCredits } from "@/lib/server/auctionSettlement";
 
 /**
  * PATCH /api/auctions/sync-status
@@ -62,15 +63,39 @@ export async function PATCH() {
     console.error("sync-status: activate error", activateError);
   }
 
-  // Step 3: Close active auctions whose end_time has passed
-  const { error: closeError } = await serviceClient
+  // Step 3: Close active auctions whose end_time has passed, then settle reservations.
+  const { data: endedActiveAuctions, error: endedFetchError } = await serviceClient
     .from("auctions")
-    .update({ status: "closed" })
+    .select("id, title, current_winner_id, current_bid")
     .eq("status", "active")
     .lte("end_time", now);
 
-  if (closeError) {
-    console.error("sync-status: close error", closeError);
+  if (endedFetchError) {
+    console.error("sync-status: ended-active fetch error", endedFetchError);
+  }
+
+  for (const auction of endedActiveAuctions ?? []) {
+    const { error: closeError } = await serviceClient
+      .from("auctions")
+      .update({ status: "closed" })
+      .eq("id", auction.id)
+      .eq("status", "active");
+
+    if (closeError) {
+      console.error("sync-status: close error", closeError);
+      continue;
+    }
+
+    try {
+      await settleAuctionCredits(serviceClient, {
+        id: auction.id,
+        title: auction.title,
+        current_winner_id: auction.current_winner_id,
+        current_bid: auction.current_bid,
+      });
+    } catch (settleError) {
+      console.error("sync-status: settle error", settleError);
+    }
   }
 
   return NextResponse.json({ ok: true });
