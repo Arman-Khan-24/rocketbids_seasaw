@@ -108,12 +108,14 @@ export function useAuction(id: string) {
   const fetchBids = useCallback(async () => {
     const { data } = await supabase
       .from("bids")
-      .select("id, auction_id, bidder_id, amount, created_at, bidder:bidder_id(full_name)")
+      .select(
+        "id, auction_id, bidder_id, amount, created_at, bidder:profiles!bids_bidder_id_fkey(full_name)",
+      )
       .eq("auction_id", id)
       .order("created_at", { ascending: false });
 
-    const mappedBids: Bid[] =
-      ((data as
+    const mappedBids: Bid[] = (
+      (data as
         | {
             id: string;
             auction_id: string;
@@ -122,15 +124,15 @@ export function useAuction(id: string) {
             created_at: string;
             bidder?: { full_name: string | null } | null;
           }[]
-        | null) ?? [])
-        .map((bid) => ({
-          id: bid.id,
-          auction_id: bid.auction_id,
-          bidder_id: bid.bidder_id,
-          bidder_name: bid.bidder?.full_name ?? null,
-          amount: bid.amount,
-          created_at: bid.created_at,
-        }));
+        | null) ?? []
+    ).map((bid) => ({
+      id: bid.id,
+      auction_id: bid.auction_id,
+      bidder_id: bid.bidder_id,
+      bidder_name: bid.bidder?.full_name ?? null,
+      amount: bid.amount,
+      created_at: bid.created_at,
+    }));
 
     setBids(mappedBids);
   }, [id, supabase]);
