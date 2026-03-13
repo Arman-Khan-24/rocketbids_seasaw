@@ -273,11 +273,17 @@ export default function AdminBidders() {
               min="1"
               className="font-mono"
             />
-            <div className="flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setModalOpen(false)}>
+            <div className="flex flex-col justify-end gap-3 sm:flex-row">
+              <Button
+                variant="secondary"
+                onClick={() => setModalOpen(false)}
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
-              <Button onClick={assignCredits}>Assign</Button>
+              <Button onClick={assignCredits} className="w-full sm:w-auto">
+                Assign
+              </Button>
             </div>
           </div>
         )}

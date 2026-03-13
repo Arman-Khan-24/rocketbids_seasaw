@@ -47,6 +47,12 @@
       system-ui,
       -apple-system,
       sans-serif;
+    overflow-x: hidden;
+  }
+
+  html,
+  body {
+    max-width: 100%;
   }
 
   /* Scrollbar */
@@ -70,6 +76,16 @@
   /* Selection */
   ::selection {
     @apply bg-rocket-gold/30 text-rocket-text;
+  }
+
+  @media (max-width: 767px) {
+    button,
+    input,
+    select,
+    textarea,
+    a[role="button"] {
+      min-height: 44px;
+    }
   }
 }
 

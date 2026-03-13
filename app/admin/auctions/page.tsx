@@ -297,7 +297,103 @@ export default function AdminAuctions() {
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-rocket-border overflow-hidden overflow-x-auto">
+        <>
+          <div className="space-y-3 md:hidden">
+            {filtered.map((auction, idx) => {
+              const bidCount = auction.bids?.[0]?.count ?? 0;
+              const isWar = auction.status === "active" && warAuctions.has(auction.id);
+
+              return (
+                <motion.div
+                  key={auction.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.02 }}
+                  className="rounded-xl border border-rocket-border bg-rocket-card p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    {auction.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={auction.image_url}
+                        alt={auction.title}
+                        className="h-12 w-12 rounded-lg object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-rocket-bg flex items-center justify-center shrink-0">
+                        <Gavel size={18} className="text-rocket-dim" />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-rocket-text">
+                        {auction.title}
+                      </p>
+                      <p className="text-xs text-rocket-muted mt-0.5">{auction.category}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-1">
+                    {statusBadgeMap[auction.status]}
+                    {auction.blind_mode && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-400">
+                        <Eye size={10} />
+                        Blind
+                      </span>
+                    )}
+                    {isWar && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-rocket-danger/30 bg-rocket-danger/15 px-2 py-0.5 text-xs font-medium text-rocket-danger animate-pulse">
+                        <Swords size={10} />
+                        War
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg border border-rocket-border bg-rocket-bg px-3 py-2">
+                      <p className="text-rocket-dim">Current bid</p>
+                      <p className="font-mono text-sm text-rocket-gold mt-0.5">
+                        {formatCredits(auction.current_bid || auction.min_bid)} cr
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-rocket-border bg-rocket-bg px-3 py-2">
+                      <p className="text-rocket-dim">Bids</p>
+                      <p className="font-mono text-sm text-rocket-text mt-0.5">{bidCount}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <TimeRemaining endTime={auction.end_time} status={auction.status} />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {auction.status === "active" && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={declaring === auction.id}
+                        onClick={() => declareWinner(auction.id)}
+                        className="w-full"
+                      >
+                        <Trophy size={14} className="mr-1" />
+                        {declaring === auction.id ? "Closing..." : "Close + Winner"}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteAuction(auction.id)}
+                      className={`w-full ${auction.status === "active" ? "" : "col-span-2"}`}
+                    >
+                      <Trash2 size={14} className="text-rocket-danger" />
+                    </Button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <div className="hidden rounded-xl border border-rocket-border overflow-hidden overflow-x-auto md:block">
           <table className="w-full min-w-[800px]">
             <thead>
               <tr className="border-b border-rocket-border bg-rocket-card">
@@ -440,7 +536,8 @@ export default function AdminAuctions() {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

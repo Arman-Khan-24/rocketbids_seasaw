@@ -111,7 +111,7 @@ export default function BrowseAuctions() {
             </p>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {liveAuctions.map((auction) => (
               <AuctionCard key={auction.id} auction={auction} />
             ))}
@@ -142,7 +142,7 @@ export default function BrowseAuctions() {
             </p>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {upcomingAuctions.map((auction) => (
               <AuctionCard key={auction.id} auction={auction} />
             ))}

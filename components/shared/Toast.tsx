@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ addToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col gap-2 px-3 pb-3 md:inset-auto md:bottom-4 md:right-4 md:px-0 md:pb-0">
         <AnimatePresence>
           {toasts.map((toast) => (
             <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
@@ -75,7 +75,7 @@ function ToastItem({
       initial={{ opacity: 0, x: 50, scale: 0.95 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: 50, scale: 0.95 }}
-      className="flex items-center gap-3 rounded-lg border border-rocket-border bg-rocket-card px-4 py-3 shadow-lg min-w-[280px]"
+      className="flex w-full items-center gap-3 rounded-lg border border-rocket-border bg-rocket-card px-4 py-3 shadow-lg md:min-w-[280px] md:w-auto"
     >
       {icons[toast.type]}
       <span className="flex-1 text-sm text-rocket-text">{toast.message}</span>

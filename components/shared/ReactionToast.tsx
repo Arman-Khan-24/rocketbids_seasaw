@@ -134,7 +134,7 @@ export function ReactionToastProvider({
   return (
     <ReactionToastContext.Provider value={{ triggerReaction }}>
       {children}
-      <div className="pointer-events-none fixed left-1/2 top-4 z-[70] w-full max-w-2xl -translate-x-1/2 px-4">
+      <div className="pointer-events-none fixed inset-x-0 top-3 z-[70] px-3 md:left-1/2 md:top-4 md:w-full md:max-w-2xl md:-translate-x-1/2 md:px-4">
         <AnimatePresence>
           {active && (
             <motion.div
@@ -143,7 +143,7 @@ export function ReactionToastProvider({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -18, scale: 0.98 }}
               transition={{ duration: 0.26, ease: "easeOut" }}
-              className="mx-auto w-fit rounded-xl border border-rocket-gold/60 bg-black/70 px-6 py-3 text-center shadow-xl backdrop-blur-sm"
+              className="mx-auto w-full rounded-xl border border-rocket-gold/60 bg-black/70 px-4 py-3 text-center shadow-xl backdrop-blur-sm md:w-fit md:px-6"
             >
               <p className="text-base font-bold tracking-wide text-rocket-gold sm:text-lg">
                 {active.message}

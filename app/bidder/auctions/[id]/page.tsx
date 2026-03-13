@@ -206,9 +206,8 @@ function AuctionDetail({
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3">
+        <div className="order-1 lg:col-span-2">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -233,7 +232,7 @@ function AuctionDetail({
               </div>
             )}
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 md:p-6 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h1 className="font-display text-2xl font-bold text-rocket-text">
@@ -269,7 +268,7 @@ function AuctionDetail({
                 {auction.description || "No description provided."}
               </p>
 
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-rocket-border">
+              <div className="grid grid-cols-1 gap-4 pt-4 border-t border-rocket-border sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-rocket-muted uppercase tracking-wider">
                     Current Bid
@@ -317,7 +316,7 @@ function AuctionDetail({
                 </motion.div>
               )}
 
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                 <div>
                   <span className="text-rocket-muted">Min bid:&nbsp;</span>
                   <span className="font-mono text-rocket-text">
@@ -333,27 +332,9 @@ function AuctionDetail({
               </div>
             </div>
           </motion.div>
-
-          {/* Bid History */}
-          <div className="space-y-3">
-            <h2 className="font-display text-lg font-semibold text-rocket-text">
-              Bid History ({bids.length})
-            </h2>
-            {auction.blind_mode && auction.status === "active" ? (
-              <div className="rounded-xl border border-rocket-border bg-rocket-card p-8 text-center">
-                <Eye className="h-8 w-8 text-rocket-dim mx-auto mb-2" />
-                <p className="text-rocket-muted text-sm">
-                  Blind mode - bid history hidden until auction closes
-                </p>
-              </div>
-            ) : (
-              <BidList bids={bids} currentUserId={userId} />
-            )}
-          </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-4">
+        <div className="order-2 space-y-4 lg:order-3">
           {auction.status === "active" && !isExpired && !isBlindLive && (
             <BidSuggestions
               bids={bids}
@@ -375,6 +356,22 @@ function AuctionDetail({
             amount={bidAmount}
             onAmountChange={setBidAmount}
           />
+        </div>
+
+        <div className="order-3 space-y-3 lg:order-2 lg:col-span-2">
+          <h2 className="font-display text-lg font-semibold text-rocket-text">
+            Bid History ({bids.length})
+          </h2>
+          {auction.blind_mode && auction.status === "active" ? (
+            <div className="rounded-xl border border-rocket-border bg-rocket-card p-6 text-center md:p-8">
+              <Eye className="h-8 w-8 text-rocket-dim mx-auto mb-2" />
+              <p className="text-rocket-muted text-sm">
+                Blind mode - bid history hidden until auction closes
+              </p>
+            </div>
+          ) : (
+            <BidList bids={bids} currentUserId={userId} />
+          )}
         </div>
       </div>
     </div>

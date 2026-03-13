@@ -111,13 +111,13 @@ export function BidForm({
       )}
 
       {!blindMode && (
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[100, 250, 500, 1000].map((inc) => (
             <button
               key={inc}
               type="button"
               onClick={() => onAmountChange(String(minimumAmount + inc))}
-              className="flex-1 rounded-lg border border-rocket-border bg-rocket-bg py-1.5 text-xs font-mono text-rocket-muted hover:border-rocket-gold hover:text-rocket-gold transition-colors"
+              className="min-h-11 rounded-lg border border-rocket-border bg-rocket-bg py-2 text-xs font-mono text-rocket-muted hover:border-rocket-gold hover:text-rocket-gold transition-colors"
             >
               +{inc}
             </button>
@@ -125,14 +125,14 @@ export function BidForm({
         </div>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <Input
           type="number"
           placeholder={blindMode ? "Enter your blind bid" : `${minimumAmount}`}
           value={amount}
           onChange={(e) => onAmountChange(e.target.value)}
           min={blindMode ? 1 : minimumAmount}
-          className="font-mono"
+          className="font-mono min-h-11"
         />
         <Button
           type="submit"
@@ -141,7 +141,7 @@ export function BidForm({
             (profile ? profile.credits <= 0 : true) ||
             (!blindMode && profile ? profile.credits < minimumAmount : false)
           }
-          className="shrink-0"
+          className="shrink-0 min-h-11"
         >
           {submitting ? "Bidding..." : "Bid"}
         </Button>
