@@ -15,6 +15,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { formatCredits } from "@/lib/utils";
+import { useToast } from "@/components/shared/Toast";
 
 interface Profile {
   id: string;
@@ -40,6 +41,7 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
     let isMounted = true;
@@ -84,10 +86,7 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
         setProfile({
           id: user.id,
           full_name:
-            profileData?.full_name ||
-            user.user_metadata?.full_name ||
-            user.email?.split("@")[0] ||
-            null,
+            profileData?.full_name || user.user_metadata?.full_name || "Bidder",
           role: "bidder",
           credits:
             typeof profileData?.credits === "number" ? profileData.credits : 0,
@@ -149,6 +148,89 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [profile?.id, supabase]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const channel = supabase
+      .channel(`bidder-auction-events-${profile.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "auctions",
+        },
+        async (payload) => {
+          const previous = payload.old as {
+            id?: string;
+            title?: string;
+            status?: string;
+            current_winner_id?: string | null;
+          };
+          const current = payload.new as {
+            id?: string;
+            title?: string;
+            status?: string;
+            current_winner_id?: string | null;
+          };
+
+          const auctionId = current.id;
+          if (!auctionId) return;
+
+          if (
+            previous.current_winner_id === profile.id &&
+            current.current_winner_id !== profile.id &&
+            current.current_winner_id !== null &&
+            current.status === "active"
+          ) {
+            addToast("You were outbid", "info");
+          }
+
+          if (previous.status !== "closed" && current.status === "closed") {
+            if (current.current_winner_id === profile.id) {
+              addToast(
+                `You won ${current.title ? `\"${current.title}\"` : "an auction"}!`,
+                "success",
+              );
+              return;
+            }
+
+            const { count } = await supabase
+              .from("bids")
+              .select("id", { count: "exact", head: true })
+              .eq("auction_id", auctionId)
+              .eq("bidder_id", profile.id);
+
+            if ((count ?? 0) > 0) {
+              addToast(
+                `Auction closed: you lost ${current.title ? `\"${current.title}\"` : "this auction"}`,
+                "error",
+              );
+            }
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [profile?.id, addToast, supabase]);
+
+  useEffect(() => {
+    const runStatusSync = async () => {
+      try {
+        await fetch("/api/auctions/sync-status", { method: "PATCH" });
+      } catch {
+        // Non-critical background refresh.
+      }
+    };
+
+    void runStatusSync();
+    const interval = setInterval(runStatusSync, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();

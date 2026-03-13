@@ -98,20 +98,47 @@ export default function AdminAuctions() {
   }, [supabase]);
 
   const fetchWarMode = useCallback(async () => {
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
     const { data: recentBids } = await supabase
       .from("bids")
-      .select("auction_id")
-      .gte("created_at", fiveMinAgo);
+      .select("auction_id, bidder_id, created_at")
+      .gte("created_at", oneMinuteAgo)
+      .order("created_at", { ascending: true });
 
-    const bidCounts: Record<string, number> = {};
+    const bidsByAuction: Record<
+      string,
+      { bidder_id: string; created_at: string }[]
+    > = {};
+    (recentBids ?? []).forEach((bid) => {
+      if (!bidsByAuction[bid.auction_id]) {
+        bidsByAuction[bid.auction_id] = [];
+      }
+      bidsByAuction[bid.auction_id].push(bid);
+    });
+
     const warSet = new Set<string>();
-    (recentBids ?? []).forEach((b) => {
-      bidCounts[b.auction_id] = (bidCounts[b.auction_id] || 0) + 1;
-      if (bidCounts[b.auction_id] >= 5) {
-        warSet.add(b.auction_id);
+
+    Object.entries(bidsByAuction).forEach(([auctionId, auctionBids]) => {
+      const sorted = [...auctionBids].sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+
+      const pairExchangeMap: Record<string, number> = {};
+      for (let i = 1; i < sorted.length; i++) {
+        const previous = sorted[i - 1];
+        const current = sorted[i];
+        if (previous.bidder_id === current.bidder_id) continue;
+
+        const key = [previous.bidder_id, current.bidder_id].sort().join("::");
+        pairExchangeMap[key] = (pairExchangeMap[key] || 0) + 1;
+      }
+
+      if (Object.values(pairExchangeMap).some((count) => count >= 3)) {
+        warSet.add(auctionId);
       }
     });
+
     setWarAuctions(warSet);
   }, [supabase]);
 

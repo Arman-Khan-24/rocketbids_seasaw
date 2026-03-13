@@ -22,6 +22,8 @@ export function AuctionCard({
 
   const isUpcoming = auction.status === "upcoming";
   const { timeLeft, isUrgent } = isUpcoming ? startCountdown : endCountdown;
+  const isBlindLive = auction.blind_mode && auction.status !== "closed";
+  const blindBidCount = auction.bids?.[0]?.count ?? 0;
 
   const statusBadge = {
     active: <Badge variant="teal">Live</Badge>,
@@ -69,9 +71,11 @@ export function AuctionCard({
               <div className="flex items-center gap-1.5">
                 <Gavel size={14} className="text-rocket-gold" />
                 <span className="font-mono text-sm font-semibold text-rocket-gold">
-                  {isUpcoming
-                    ? `From ${auction.min_bid} cr`
-                    : `${auction.current_bid || auction.min_bid} cr`}
+                  {isBlindLive
+                    ? `${blindBidCount} bid${blindBidCount === 1 ? "" : "s"}`
+                    : isUpcoming
+                      ? `From ${auction.min_bid} cr`
+                      : `${auction.current_bid || auction.min_bid} cr`}
                 </span>
               </div>
 

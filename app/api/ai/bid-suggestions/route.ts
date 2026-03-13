@@ -19,11 +19,7 @@ type RecentBidInput = {
 };
 
 function limitWords(value: string, maxWords: number): string {
-  const words = value
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean);
+  const words = value.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
   return words.slice(0, maxWords).join(" ");
 }
 
@@ -34,7 +30,9 @@ function cleanText(value: unknown): string {
   return value.replace(/[\r\n]+/g, " ").trim();
 }
 
-function sanitizeOverlay(raw: Partial<GeminiOverlayResponse>): GeminiOverlayResponse {
+function sanitizeOverlay(
+  raw: Partial<GeminiOverlayResponse>,
+): GeminiOverlayResponse {
   const recommendation =
     raw.recommendation === "INVEST" ||
     raw.recommendation === "AVOID" ||
@@ -43,7 +41,8 @@ function sanitizeOverlay(raw: Partial<GeminiOverlayResponse>): GeminiOverlayResp
       : "WAIT";
 
   const explanation =
-    limitWords(cleanText(raw.explanation), 12) || "Momentum unclear with current auction pressure.";
+    limitWords(cleanText(raw.explanation), 12) ||
+    "Momentum unclear with current auction pressure.";
 
   const labels = raw.labels ?? {
     safe: "Lower risk choice",
@@ -56,7 +55,8 @@ function sanitizeOverlay(raw: Partial<GeminiOverlayResponse>): GeminiOverlayResp
     explanation,
     labels: {
       safe: limitWords(cleanText(labels.safe), 8) || "Lower risk choice",
-      optimal: limitWords(cleanText(labels.optimal), 8) || "Balanced pressure move",
+      optimal:
+        limitWords(cleanText(labels.optimal), 8) || "Balanced pressure move",
       aggressive:
         limitWords(cleanText(labels.aggressive), 8) || "High push for lead",
     },
@@ -64,7 +64,11 @@ function sanitizeOverlay(raw: Partial<GeminiOverlayResponse>): GeminiOverlayResp
 }
 
 function extractJsonObject(text: string): string | null {
-  const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+  const trimmed = text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
   if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
     return trimmed;
   }
@@ -122,7 +126,9 @@ export async function POST(request: NextRequest) {
       amount: Number((item as { amount?: unknown }).amount ?? 0),
       timestamp: String((item as { timestamp?: unknown }).timestamp ?? ""),
     }))
-    .filter((item) => Number.isFinite(item.amount) && item.timestamp.length > 0);
+    .filter(
+      (item) => Number.isFinite(item.amount) && item.timestamp.length > 0,
+    );
 
   const prompt = [
     "You are an auction bidding assistant for RocketBids.",
@@ -149,7 +155,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const geminiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
         process.env.GEMINI_API_KEY,
       {
         method: "POST",

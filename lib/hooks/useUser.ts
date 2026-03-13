@@ -20,6 +20,15 @@ export function useUser() {
   const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
+    async function loadProfile(userId: string) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      setProfile(data as Profile | null);
+    }
+
     async function getUser() {
       const {
         data: { user },
@@ -27,12 +36,7 @@ export function useUser() {
       setUser(user);
 
       if (user) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-        setProfile(data as Profile | null);
+        await loadProfile(user.id);
       }
 
       setLoading(false);
@@ -44,13 +48,39 @@ export function useUser() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (!session?.user) {
+      if (session?.user) {
+        void loadProfile(session.user.id);
+      } else {
         setProfile(null);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [supabase]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`use-user-profile-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          setProfile(payload.new as Profile);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase]);
 
   return { user, profile, loading };
 }

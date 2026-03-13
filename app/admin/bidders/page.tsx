@@ -17,6 +17,9 @@ interface Bidder {
   full_name: string;
   credits: number;
   created_at: string;
+  total_bids: number;
+  total_wins: number;
+  is_sniper: boolean;
 }
 
 export default function AdminBidders() {
@@ -31,12 +34,57 @@ export default function AdminBidders() {
   const { addToast } = useToast();
 
   const fetchBidders = useCallback(async () => {
-    const { data } = await supabase
+    const { data: profiles } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id, full_name, credits, created_at")
       .eq("role", "bidder")
       .order("created_at", { ascending: false });
-    const list = (data as Bidder[]) ?? [];
+
+    const { data: bidderBids } = await supabase
+      .from("bids")
+      .select("auction_id, bidder_id, is_snipe");
+
+    const { data: closedAuctions } = await supabase
+      .from("auctions")
+      .select("id, current_winner_id")
+      .eq("status", "closed");
+
+    const bidCountMap: Record<string, number> = {};
+    const snipeCountMap: Record<string, number> = {};
+
+    (bidderBids ?? []).forEach((bid) => {
+      bidCountMap[bid.bidder_id] = (bidCountMap[bid.bidder_id] || 0) + 1;
+      if (bid.is_snipe) {
+        snipeCountMap[bid.bidder_id] = (snipeCountMap[bid.bidder_id] || 0) + 1;
+      }
+    });
+
+    const winCountMap: Record<string, number> = {};
+    (closedAuctions ?? []).forEach((auction) => {
+      if (!auction.current_winner_id) return;
+      winCountMap[auction.current_winner_id] =
+        (winCountMap[auction.current_winner_id] || 0) + 1;
+    });
+
+    const list: Bidder[] = (
+      (profiles as
+        | {
+            id: string;
+            full_name: string | null;
+            credits: number;
+            created_at: string;
+          }[]
+        | null) ?? []
+    ).map((profile) => ({
+      id: profile.id,
+      full_name: profile.full_name || "Unnamed Bidder",
+      credits: profile.credits ?? 0,
+      created_at: profile.created_at,
+      total_bids: bidCountMap[profile.id] || 0,
+      total_wins: winCountMap[profile.id] || 0,
+      is_sniper: (snipeCountMap[profile.id] || 0) >= 3,
+    }));
+
     setBidders(list);
     setFiltered(list);
     setLoading(false);
@@ -92,8 +140,21 @@ export default function AdminBidders() {
         `Assigned ${amount} credits to ${selectedBidder.full_name}`,
         "success",
       );
+      setBidders((current) =>
+        current.map((bidder) =>
+          bidder.id === selectedBidder.id
+            ? { ...bidder, credits: bidder.credits + amount }
+            : bidder,
+        ),
+      );
+      setFiltered((current) =>
+        current.map((bidder) =>
+          bidder.id === selectedBidder.id
+            ? { ...bidder, credits: bidder.credits + amount }
+            : bidder,
+        ),
+      );
       setModalOpen(false);
-      void fetchBidders();
     }
   }
 
@@ -143,14 +204,28 @@ export default function AdminBidders() {
                   <p className="font-medium text-rocket-text">
                     {bidder.full_name}
                   </p>
-                  <p className="text-xs text-rocket-dim font-mono">
-                    {bidder.id.slice(0, 12)}...
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge variant="gold">
+                    <Coins size={10} className="mr-1" />
+                    {formatCredits(bidder.credits)} cr
+                  </Badge>
+                  {bidder.is_sniper && <Badge variant="danger">Sniper</Badge>}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-md border border-rocket-border bg-rocket-bg px-2 py-1.5">
+                  <p className="text-rocket-dim">Total bids</p>
+                  <p className="font-mono text-rocket-text mt-0.5">
+                    {formatCredits(bidder.total_bids)}
                   </p>
                 </div>
-                <Badge variant="gold">
-                  <Coins size={10} className="mr-1" />
-                  {formatCredits(bidder.credits)} cr
-                </Badge>
+                <div className="rounded-md border border-rocket-border bg-rocket-bg px-2 py-1.5">
+                  <p className="text-rocket-dim">Wins</p>
+                  <p className="font-mono text-rocket-teal mt-0.5">
+                    {formatCredits(bidder.total_wins)}
+                  </p>
+                </div>
               </div>
               <div className="mt-3 pt-3 border-t border-rocket-border">
                 <Button

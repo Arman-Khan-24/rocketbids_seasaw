@@ -41,7 +41,7 @@ export function BidList({ bids, currentUserId }: BidListProps) {
                 <span className="text-rocket-teal font-medium">You</span>
               ) : (
                 <span className="text-rocket-muted">
-                  {bid.bidder_id.slice(0, 8)}...
+                  {bid.bidder_name || "Unknown bidder"}
                 </span>
               )}
             </span>

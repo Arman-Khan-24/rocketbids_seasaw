@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Search, Filter, Zap, Clock } from "lucide-react";
 import { useAuctions, type Auction } from "@/lib/hooks/useAuctions";
@@ -22,17 +22,9 @@ const categories = [
 
 export default function BrowseAuctions() {
   // Fetch all auctions (no status filter) so we get both active and upcoming
-  const { auctions, loading, refetch } = useAuctions();
+  const { auctions, loading } = useAuctions();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
-
-  // 30-second interval: re-sync statuses and refresh the list
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [refetch]);
 
   const matchesFilter = (a: Auction) => {
     const matchSearch =

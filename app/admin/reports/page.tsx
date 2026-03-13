@@ -39,6 +39,18 @@ interface BidTimestamp {
   created_at: string;
 }
 
+interface TopBidderRow {
+  bidderId: string;
+  bidderName: string;
+  bids: number;
+}
+
+interface TopAuctionRow {
+  auctionId: string;
+  title: string;
+  bids: number;
+}
+
 export default function AdminReports() {
   const [closedAuctions, setClosedAuctions] = useState<AuctionReport[]>([]);
   const [statusData, setStatusData] = useState<
@@ -49,6 +61,10 @@ export default function AdminReports() {
   const [creditFlow, setCreditFlow] = useState<
     { date: string; assigned: number; deducted: number }[]
   >([]);
+  const [topBidders, setTopBidders] = useState<TopBidderRow[]>([]);
+  const [topAuctions, setTopAuctions] = useState<TopAuctionRow[]>([]);
+  const [miningCredits, setMiningCredits] = useState(0);
+  const [reservedCredits, setReservedCredits] = useState(0);
   const [totalCreditsAssigned, setTotalCreditsAssigned] = useState(0);
   const [totalCreditsDeducted, setTotalCreditsDeducted] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -90,6 +106,10 @@ export default function AdminReports() {
       const credits = creditsRes.data ?? [];
       const pulseBids = (pulseBidsRes.data as BidTimestamp[]) ?? [];
 
+      const { data: bidRows } = await supabase
+        .from("bids")
+        .select("auction_id, bidder_id");
+
       // Bid counts per auction
       const bidCounts: Record<string, number> = {};
       bids.forEach((b) => {
@@ -125,6 +145,7 @@ export default function AdminReports() {
       // Credit flow
       let assigned = 0;
       let deducted = 0;
+      let mining = 0;
       const flowByDay: Record<string, { assigned: number; deducted: number }> =
         {};
       credits.forEach((c) => {
@@ -133,9 +154,12 @@ export default function AdminReports() {
           day: "numeric",
         });
         if (!flowByDay[day]) flowByDay[day] = { assigned: 0, deducted: 0 };
-        if (c.type === "assign" || c.type === "mining") {
+        if (c.type === "assign") {
           flowByDay[day].assigned += c.amount;
           assigned += c.amount;
+        } else if (c.type === "mining") {
+          flowByDay[day].assigned += c.amount;
+          mining += c.amount;
         } else {
           flowByDay[day].deducted += Math.abs(c.amount);
           deducted += Math.abs(c.amount);
@@ -149,6 +173,55 @@ export default function AdminReports() {
       );
       setTotalCreditsAssigned(assigned);
       setTotalCreditsDeducted(deducted);
+      setMiningCredits(mining);
+
+      const { data: bidderProfiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, reserved_credits")
+        .eq("role", "bidder");
+
+      const profileNameMap: Record<string, string> = {};
+      let reservedTotal = 0;
+      (bidderProfiles ?? []).forEach((profile) => {
+        profileNameMap[profile.id] = profile.full_name ?? "Unknown";
+        reservedTotal += profile.reserved_credits ?? 0;
+      });
+      setReservedCredits(reservedTotal);
+
+      const bidderCounts: Record<string, number> = {};
+      const auctionCounts: Record<string, number> = {};
+      (
+        (bidRows as { auction_id: string; bidder_id: string }[] | null) ?? []
+      ).forEach((row) => {
+        bidderCounts[row.bidder_id] = (bidderCounts[row.bidder_id] || 0) + 1;
+        auctionCounts[row.auction_id] =
+          (auctionCounts[row.auction_id] || 0) + 1;
+      });
+
+      const topBidderRows = Object.entries(bidderCounts)
+        .map(([bidderId, count]) => ({
+          bidderId,
+          bidderName: profileNameMap[bidderId] ?? "Unknown",
+          bids: count,
+        }))
+        .sort((a, b) => b.bids - a.bids)
+        .slice(0, 5);
+      setTopBidders(topBidderRows);
+
+      const auctionTitleMap: Record<string, string> = {};
+      auctions.forEach((auction) => {
+        auctionTitleMap[auction.id] = auction.title;
+      });
+
+      const topAuctionRows = Object.entries(auctionCounts)
+        .map(([auctionId, count]) => ({
+          auctionId,
+          title: auctionTitleMap[auctionId] ?? "Unknown auction",
+          bids: count,
+        }))
+        .sort((a, b) => b.bids - a.bids)
+        .slice(0, 5);
+      setTopAuctions(topAuctionRows);
 
       // Bid pulse for the last 24 hours (hourly buckets)
       const buckets = Array.from({ length: 24 }, (_, index) => {
@@ -226,6 +299,29 @@ export default function AdminReports() {
           value={formatCredits(totalCreditsDeducted)}
           icon={TrendingUp}
           color="danger"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          title="Mining Credits"
+          value={formatCredits(miningCredits)}
+          icon={Coins}
+          color="gold"
+        />
+        <StatCard
+          title="Reserved Credits"
+          value={formatCredits(reservedCredits)}
+          icon={Coins}
+          color="danger"
+        />
+        <StatCard
+          title="Net Credits"
+          value={formatCredits(
+            totalCreditsAssigned + miningCredits - totalCreditsDeducted,
+          )}
+          icon={TrendingUp}
+          color="teal"
         />
       </div>
 
@@ -391,6 +487,68 @@ export default function AdminReports() {
           </p>
         )}
       </motion.div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+          className="rounded-xl border border-rocket-border bg-rocket-card p-5"
+        >
+          <h2 className="font-display text-base font-semibold text-rocket-text mb-3">
+            Top Bidders
+          </h2>
+          {topBidders.length === 0 ? (
+            <p className="text-sm text-rocket-muted">No bidder activity yet</p>
+          ) : (
+            <div className="space-y-2">
+              {topBidders.map((row) => (
+                <div
+                  key={row.bidderId}
+                  className="flex items-center justify-between rounded-lg border border-rocket-border bg-rocket-bg px-3 py-2"
+                >
+                  <span className="text-sm text-rocket-text truncate">
+                    {row.bidderName}
+                  </span>
+                  <span className="font-mono text-sm text-rocket-gold">
+                    {formatCredits(row.bids)} bids
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.24 }}
+          className="rounded-xl border border-rocket-border bg-rocket-card p-5"
+        >
+          <h2 className="font-display text-base font-semibold text-rocket-text mb-3">
+            Top Auctions by Activity
+          </h2>
+          {topAuctions.length === 0 ? (
+            <p className="text-sm text-rocket-muted">No auction activity yet</p>
+          ) : (
+            <div className="space-y-2">
+              {topAuctions.map((row) => (
+                <div
+                  key={row.auctionId}
+                  className="flex items-center justify-between rounded-lg border border-rocket-border bg-rocket-bg px-3 py-2"
+                >
+                  <span className="text-sm text-rocket-text truncate">
+                    {row.title}
+                  </span>
+                  <span className="font-mono text-sm text-rocket-gold">
+                    {formatCredits(row.bids)} bids
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
 
       {/* Closed Auction Results */}
       <motion.div

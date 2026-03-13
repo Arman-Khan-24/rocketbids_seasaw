@@ -69,7 +69,9 @@ export function BidSuggestions({
   creditBalance,
   onSelect,
 }: BidSuggestionsProps) {
-  const [geminiOverlay, setGeminiOverlay] = useState<GeminiOverlay | null>(null);
+  const [geminiOverlay, setGeminiOverlay] = useState<GeminiOverlay | null>(
+    null,
+  );
 
   // Average increment from the last 10 bids (sorted oldest to newest).
   const avgIncrement = useMemo(() => {
@@ -124,12 +126,34 @@ export function BidSuggestions({
     [bids],
   );
 
+  const fallbackOverlay = useMemo<GeminiOverlay>(() => {
+    const recommendation: Recommendation =
+      warMode || creditBalance < base
+        ? "WAIT"
+        : creditBalance >= base * 2
+          ? "INVEST"
+          : "WAIT";
+
+    return {
+      recommendation,
+      explanation:
+        recommendation === "INVEST"
+          ? "Local trend says momentum favors a stronger bid now."
+          : "Using local fallback while AI guidance is unavailable.",
+      labels: {
+        safe: "Lower risk local estimate",
+        optimal: "Balanced local estimate",
+        aggressive: "High pressure local estimate",
+      },
+    };
+  }, [warMode, creditBalance, base]);
+
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-    setGeminiOverlay(null);
+    setGeminiOverlay(fallbackOverlay);
 
     async function fetchGeminiOverlay() {
       try {
@@ -173,7 +197,7 @@ export function BidSuggestions({
           });
         }
       } catch {
-        // Graceful fallback: keep default local suggestions only.
+        // Graceful fallback: keep local recommendation overlay.
       } finally {
         clearTimeout(timeoutId);
       }
@@ -193,6 +217,7 @@ export function BidSuggestions({
     warMode,
     creditBalance,
     lastFiveBids,
+    fallbackOverlay,
   ]);
 
   return (
@@ -217,37 +242,44 @@ export function BidSuggestions({
           >
             {geminiOverlay.recommendation}
           </div>
-          <p className="text-xs text-rocket-muted">{geminiOverlay.explanation}</p>
+          <p className="text-xs text-rocket-muted">
+            {geminiOverlay.explanation}
+          </p>
         </div>
       )}
 
       <div className="grid grid-cols-3 gap-2">
-        {TIERS.map(({ key, label, multiplier, probRange, color, bg, border }) => {
-          const amount = Math.round(base + avgIncrement * multiplier);
-          const mid = Math.round((probRange[0] + probRange[1]) / 2);
-          const raw = mid - bidderPenalty - timePenalty;
-          const prob = Math.max(probRange[0] - 4, Math.min(probRange[1], raw));
+        {TIERS.map(
+          ({ key, label, multiplier, probRange, color, bg, border }) => {
+            const amount = Math.round(base + avgIncrement * multiplier);
+            const mid = Math.round((probRange[0] + probRange[1]) / 2);
+            const raw = mid - bidderPenalty - timePenalty;
+            const prob = Math.max(
+              probRange[0] - 4,
+              Math.min(probRange[1], raw),
+            );
 
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onSelect(amount)}
-              className={`rounded-lg border ${border} ${bg} p-2.5 text-left transition-colors`}
-            >
-              <p className={`text-xs font-semibold ${color}`}>{label}</p>
-              <p className={`font-mono text-sm font-bold ${color} mt-0.5`}>
-                {amount} cr
-              </p>
-              {geminiOverlay?.labels[key] && (
-                <p className="mt-1 text-[11px] text-rocket-dim">
-                  {geminiOverlay.labels[key]}
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onSelect(amount)}
+                className={`rounded-lg border ${border} ${bg} p-2.5 text-left transition-colors`}
+              >
+                <p className={`text-xs font-semibold ${color}`}>{label}</p>
+                <p className={`font-mono text-sm font-bold ${color} mt-0.5`}>
+                  {amount} cr
                 </p>
-              )}
-              <p className="text-xs text-rocket-dim mt-1">{prob}% win</p>
-            </button>
-          );
-        })}
+                {geminiOverlay?.labels[key] && (
+                  <p className="mt-1 text-[11px] text-rocket-dim">
+                    {geminiOverlay.labels[key]}
+                  </p>
+                )}
+                <p className="text-xs text-rocket-dim mt-1">{prob}% win</p>
+              </button>
+            );
+          },
+        )}
       </div>
     </motion.div>
   );

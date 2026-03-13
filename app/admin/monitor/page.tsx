@@ -32,7 +32,10 @@ interface SniperData {
 
 interface WarState {
   auctionId: string;
-  users: string[];
+  auctionTitle: string;
+  users: { id: string; name: string }[];
+  exchanges: number;
+  lastExchangeAt: string;
 }
 
 function LiveAuctionCard({ auction }: { auction: Auction }) {
@@ -68,33 +71,92 @@ export default function AdminMonitor() {
   const supabase = useMemo(() => createClient(), []);
 
   const fetchData = useCallback(async () => {
-    const [auctionsRes, bidsRes] = await Promise.all([
-      supabase
-        .from("auctions")
-        .select("*")
-        .eq("status", "active")
-        .order("end_time", { ascending: true }),
-      supabase
-        .from("bids")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50),
-    ]);
+    try {
+      await fetch("/api/auctions/sync-status", { method: "PATCH" });
+    } catch {
+      // Non-critical background sync.
+    }
+
+    const oneMinuteAgoIso = new Date(Date.now() - 60_000).toISOString();
+
+    const [auctionsRes, bidsRes, recentWindowBidsRes, snipeBidsRes] =
+      await Promise.all([
+        supabase
+          .from("auctions")
+          .select("*")
+          .eq("status", "active")
+          .order("end_time", { ascending: true }),
+        supabase
+          .from("bids")
+          .select("id, auction_id, bidder_id, amount, created_at")
+          .order("created_at", { ascending: false })
+          .limit(60),
+        supabase
+          .from("bids")
+          .select("auction_id, bidder_id, created_at")
+          .gte("created_at", oneMinuteAgoIso)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("bids")
+          .select("bidder_id, created_at")
+          .eq("is_snipe", true),
+      ]);
 
     const auctions = (auctionsRes.data as Auction[]) ?? [];
     const bids = (bidsRes.data as LiveBid[]) ?? [];
+    const windowBids =
+      (recentWindowBidsRes.data as {
+        auction_id: string;
+        bidder_id: string;
+        created_at: string;
+      }[]) ?? [];
+
+    const bidderIds = Array.from(
+      new Set([
+        ...bids.map((b) => b.bidder_id),
+        ...windowBids.map((b) => b.bidder_id),
+        ...((snipeBidsRes.data as { bidder_id: string }[] | null) ?? []).map(
+          (b) => b.bidder_id,
+        ),
+      ]),
+    );
+
+    const profileMap: Record<string, string> = {};
+    if (bidderIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", bidderIds);
+
+      (profiles ?? []).forEach((p) => {
+        profileMap[p.id] = p.full_name || "Unknown";
+      });
+    }
+
+    const auctionMap: Record<string, string> = {};
+    auctions.forEach((a) => {
+      auctionMap[a.id] = a.title;
+    });
+
+    const enrichedBids = bids
+      .filter((bid) => Boolean(auctionMap[bid.auction_id]))
+      .map((bid) => ({
+        ...bid,
+        bidder_name: profileMap[bid.bidder_id] ?? "Unknown",
+        auction_title: auctionMap[bid.auction_id] ?? "Unknown",
+      }));
 
     setActiveAuctions(auctions);
-    setRecentBids(bids);
+    setRecentBids(enrichedBids);
 
     // Detect snipers: users with 3+ bids flagged as snipes (is_snipe = true)
-    const { data: snipeBidsData } = await supabase
-      .from("bids")
-      .select("bidder_id, created_at")
-      .eq("is_snipe", true);
+    const snipeBidsData =
+      (snipeBidsRes.data as
+        | { bidder_id: string; created_at: string }[]
+        | null) ?? [];
 
     const sniperMap: Record<string, { count: number; lastBid: string }> = {};
-    ((snipeBidsData as { bidder_id: string; created_at: string }[]) ?? []).forEach((bid) => {
+    snipeBidsData.forEach((bid) => {
       if (!sniperMap[bid.bidder_id]) {
         sniperMap[bid.bidder_id] = { count: 0, lastBid: bid.created_at };
       }
@@ -108,52 +170,84 @@ export default function AdminMonitor() {
       .filter(([, data]) => data.count >= 3)
       .map(([userId, data]) => ({
         userId,
-        userName: userId.slice(0, 8),
+        userName: profileMap[userId] ?? "Unknown",
         lastSecondBids: data.count,
         lastBidTime: data.lastBid,
       }));
     setSnipers(detectedSnipers);
 
     // Detect bidding wars: same 2 users bid 3+ times in 60s on same auction
-    const warDetector: Record<string, Record<string, { times: number[] }>> = {};
-    bids.forEach((bid) => {
-      if (!warDetector[bid.auction_id]) warDetector[bid.auction_id] = {};
-      if (!warDetector[bid.auction_id][bid.bidder_id]) {
-        warDetector[bid.auction_id][bid.bidder_id] = { times: [] };
+    const bidsByAuction: Record<
+      string,
+      { bidder_id: string; created_at: string }[]
+    > = {};
+    windowBids.forEach((bid) => {
+      if (!bidsByAuction[bid.auction_id]) {
+        bidsByAuction[bid.auction_id] = [];
       }
-      warDetector[bid.auction_id][bid.bidder_id].times.push(
-        new Date(bid.created_at).getTime(),
-      );
+      bidsByAuction[bid.auction_id].push(bid);
     });
 
-    const detectedWars: WarState[] = [];
-    Object.entries(warDetector).forEach(([auctionId, users]) => {
-      const userIds = Object.keys(users);
-      for (let i = 0; i < userIds.length; i++) {
-        for (let j = i + 1; j < userIds.length; j++) {
-          const timesA = users[userIds[i]].times;
-          const timesB = users[userIds[j]].times;
-          const allTimes = [...timesA, ...timesB].sort();
-          for (let k = 0; k < allTimes.length - 5; k++) {
-            if (allTimes[k + 5] - allTimes[k] <= 60000) {
-              const aInteractions = timesA.filter(
-                (t) => t >= allTimes[k] && t <= allTimes[k + 5],
-              ).length;
-              const bInteractions = timesB.filter(
-                (t) => t >= allTimes[k] && t <= allTimes[k + 5],
-              ).length;
-              if (aInteractions >= 3 && bInteractions >= 3) {
-                detectedWars.push({
-                  auctionId,
-                  users: [userIds[i], userIds[j]],
-                });
-                break;
-              }
-            }
+    const detectedWars: WarState[] = Object.entries(bidsByAuction)
+      .map(([auctionId, auctionBids]) => {
+        const sorted = [...auctionBids].sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+
+        const pairMap: Record<
+          string,
+          { exchanges: number; users: [string, string]; lastExchange: number }
+        > = {};
+
+        for (let i = 1; i < sorted.length; i++) {
+          const previous = sorted[i - 1];
+          const current = sorted[i];
+          if (previous.bidder_id === current.bidder_id) continue;
+
+          const pairUsers = [previous.bidder_id, current.bidder_id].sort() as [
+            string,
+            string,
+          ];
+          const key = pairUsers.join("::");
+          const exchangeAt = new Date(current.created_at).getTime();
+
+          if (!pairMap[key]) {
+            pairMap[key] = {
+              exchanges: 0,
+              users: pairUsers,
+              lastExchange: exchangeAt,
+            };
           }
+
+          pairMap[key].exchanges += 1;
+          pairMap[key].lastExchange = exchangeAt;
         }
-      }
-    });
+
+        const hottestPair = Object.values(pairMap)
+          .filter(
+            (pair) =>
+              pair.exchanges >= 3 && Date.now() - pair.lastExchange <= 60000,
+          )
+          .sort((a, b) => b.exchanges - a.exchanges)[0];
+
+        if (!hottestPair) {
+          return null;
+        }
+
+        return {
+          auctionId,
+          auctionTitle: auctionMap[auctionId] ?? "Unknown",
+          users: hottestPair.users.map((id) => ({
+            id,
+            name: profileMap[id] ?? "Unknown",
+          })),
+          exchanges: hottestPair.exchanges,
+          lastExchangeAt: new Date(hottestPair.lastExchange).toISOString(),
+        };
+      })
+      .filter((war): war is WarState => war !== null);
+
     setWars(detectedWars);
 
     setLoading(false);
@@ -177,6 +271,14 @@ export default function AdminMonitor() {
       supabase.removeChannel(channel);
     };
   }, [fetchData, supabase]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchData();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   useEffect(() => {
     const currentSniperIds = new Set(snipers.map((s) => s.userId));
@@ -251,13 +353,11 @@ export default function AdminMonitor() {
               </Card>
             ) : (
               recentBids.map((bid, idx) => {
-                const auctionTitle =
-                  activeAuctions.find((a) => a.id === bid.auction_id)?.title ??
-                  "Unknown";
+                const auctionTitle = bid.auction_title ?? "Unknown";
                 const isWar = wars.some(
                   (w) =>
                     w.auctionId === bid.auction_id &&
-                    w.users.includes(bid.bidder_id),
+                    w.users.some((user) => user.id === bid.bidder_id),
                 );
 
                 return (
@@ -276,6 +376,9 @@ export default function AdminMonitor() {
                       <div className="min-w-0">
                         <p className="text-xs text-rocket-muted truncate">
                           {auctionTitle}
+                        </p>
+                        <p className="text-xs text-rocket-dim truncate">
+                          {bid.bidder_name ?? "Unknown"}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="font-mono text-sm font-semibold text-rocket-gold">
@@ -326,6 +429,40 @@ export default function AdminMonitor() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-rocket-text uppercase tracking-wider">
+          <Swords size={14} className="text-rocket-danger" />
+          War Mode ({wars.length})
+        </h2>
+        {wars.length === 0 ? (
+          <Card>
+            <p className="text-center text-sm text-rocket-muted py-4">
+              No active bidding wars
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {wars.map((war) => (
+              <div
+                key={war.auctionId}
+                className="rounded-lg border border-rocket-danger/40 bg-rocket-danger/5 p-3"
+              >
+                <p className="text-sm font-semibold text-rocket-text">
+                  {war.auctionTitle}
+                </p>
+                <p className="text-xs text-rocket-muted mt-1">
+                  {war.users.map((u) => u.name).join(" vs ")} • {war.exchanges}{" "}
+                  exchanges
+                </p>
+                <p className="text-xs text-rocket-dim mt-1">
+                  Last exchange {formatDistanceToNow(war.lastExchangeAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

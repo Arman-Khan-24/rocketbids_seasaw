@@ -17,7 +17,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
     return NextResponse.json(
       { error: "Service keys are not configured" },
       { status: 500 },
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
   if (auction.status !== "active") {
     return NextResponse.json(
       { error: "Auction is not active" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -65,8 +68,12 @@ export async function POST(request: NextRequest) {
     auction.current_bid > 0 ? auction.current_bid + 1 : auction.min_bid;
   if (amount < minimumBid) {
     return NextResponse.json(
-      { error: `Minimum bid is ${minimumBid} credits` },
-      { status: 400 }
+      {
+        error: auction.blind_mode
+          ? "Bid is too low for this blind auction"
+          : `Minimum bid is ${minimumBid} credits`,
+      },
+      { status: 400 },
     );
   }
 
@@ -98,7 +105,7 @@ export async function POST(request: NextRequest) {
   if (reserveDelta > 0 && profile.credits < reserveDelta) {
     return NextResponse.json(
       { error: "Insufficient credits" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -131,7 +138,10 @@ export async function POST(request: NextRequest) {
     }
 
     const previousReserved = prevProfile.reserved_credits ?? 0;
-    const updatedPreviousReserved = Math.max(previousReserved - releaseAmount, 0);
+    const updatedPreviousReserved = Math.max(
+      previousReserved - releaseAmount,
+      0,
+    );
 
     const { error: releaseError } = await serviceClient
       .from("profiles")
@@ -225,7 +235,7 @@ export async function POST(request: NextRequest) {
   if (reservationError) {
     return NextResponse.json(
       { error: "Failed to store reservation" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -244,7 +254,7 @@ export async function POST(request: NextRequest) {
   if (bidError) {
     return NextResponse.json(
       { error: "Failed to record bid" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -260,10 +270,7 @@ export async function POST(request: NextRequest) {
     updateData.end_time = newEndTime.toISOString();
   }
 
-  await serviceClient
-    .from("auctions")
-    .update(updateData)
-    .eq("id", auction_id);
+  await serviceClient.from("auctions").update(updateData).eq("id", auction_id);
 
   // Credit Mining: +2 credits for successful bid activity
   const { data: bonusProfile, error: bonusProfileError } = await serviceClient
@@ -273,7 +280,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (bonusProfileError || !bonusProfile) {
-    console.error("Failed to fetch profile for bid activity bonus", bonusProfileError);
+    console.error(
+      "Failed to fetch profile for bid activity bonus",
+      bonusProfileError,
+    );
   } else {
     const currentCredits = bonusProfile.credits ?? 0;
     const bonusCredits = currentCredits + BID_ACTIVITY_BONUS;

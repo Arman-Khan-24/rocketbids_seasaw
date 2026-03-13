@@ -84,10 +84,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         setProfile({
           id: user.id,
           full_name:
-            profileData?.full_name ||
-            user.user_metadata?.full_name ||
-            user.email?.split("@")[0] ||
-            null,
+            profileData?.full_name || user.user_metadata?.full_name || "Admin",
           role: "admin",
         });
         setChecking(false);
@@ -100,6 +97,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       isMounted = false;
     };
   }, [router, supabase]);
+
+  useEffect(() => {
+    const runStatusSync = async () => {
+      try {
+        await fetch("/api/auctions/sync-status", { method: "PATCH" });
+      } catch {
+        // Non-critical background refresh.
+      }
+    };
+
+    void runStatusSync();
+    const interval = setInterval(runStatusSync, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();

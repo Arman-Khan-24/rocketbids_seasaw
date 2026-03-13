@@ -18,12 +18,14 @@ export interface Auction {
   blind_mode: boolean;
   created_by: string;
   created_at: string;
+  bids?: { count: number }[];
 }
 
 export interface Bid {
   id: string;
   auction_id: string;
   bidder_id: string;
+  bidder_name: string | null;
   amount: number;
   created_at: string;
 }
@@ -43,7 +45,7 @@ export function useAuctions(status?: string) {
 
     let query = supabase
       .from("auctions")
-      .select("*")
+      .select("*, bids(count)")
       .order("created_at", { ascending: false });
     if (status) {
       query = query.eq("status", status);
@@ -55,6 +57,10 @@ export function useAuctions(status?: string) {
 
   useEffect(() => {
     fetchAuctions();
+
+    const interval = setInterval(() => {
+      fetchAuctions();
+    }, 30000);
 
     const channel = supabase
       .channel("auctions-realtime")
@@ -68,6 +74,7 @@ export function useAuctions(status?: string) {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       void supabase.removeChannel(channel);
     };
   }, [fetchAuctions, supabase]);
@@ -101,15 +108,41 @@ export function useAuction(id: string) {
   const fetchBids = useCallback(async () => {
     const { data } = await supabase
       .from("bids")
-      .select("*")
+      .select("id, auction_id, bidder_id, amount, created_at, bidder:bidder_id(full_name)")
       .eq("auction_id", id)
       .order("created_at", { ascending: false });
-    setBids((data as Bid[]) ?? []);
+
+    const mappedBids: Bid[] =
+      ((data as
+        | {
+            id: string;
+            auction_id: string;
+            bidder_id: string;
+            amount: number;
+            created_at: string;
+            bidder?: { full_name: string | null } | null;
+          }[]
+        | null) ?? [])
+        .map((bid) => ({
+          id: bid.id,
+          auction_id: bid.auction_id,
+          bidder_id: bid.bidder_id,
+          bidder_name: bid.bidder?.full_name ?? null,
+          amount: bid.amount,
+          created_at: bid.created_at,
+        }));
+
+    setBids(mappedBids);
   }, [id, supabase]);
 
   useEffect(() => {
     fetchAuction();
     fetchBids();
+
+    const interval = setInterval(() => {
+      fetchAuction();
+      fetchBids();
+    }, 30000);
 
     const auctionChannel = supabase
       .channel(`auction-${id}`)
@@ -145,6 +178,7 @@ export function useAuction(id: string) {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       void supabase.removeChannel(auctionChannel);
       void supabase.removeChannel(bidsChannel);
     };

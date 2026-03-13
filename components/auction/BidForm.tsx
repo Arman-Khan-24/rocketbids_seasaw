@@ -14,6 +14,7 @@ interface BidFormProps {
   minBid: number;
   status: string;
   isExpired: boolean;
+  blindMode: boolean;
   amount: string;
   onAmountChange: (v: string) => void;
 }
@@ -24,6 +25,7 @@ export function BidForm({
   minBid,
   status,
   isExpired,
+  blindMode,
   amount,
   onAmountChange,
 }: BidFormProps) {
@@ -37,13 +39,13 @@ export function BidForm({
     e.preventDefault();
     const bidAmount = parseInt(amount, 10);
 
-    if (isNaN(bidAmount) || bidAmount < minimumAmount) {
-      addToast(`Minimum bid is ${minimumAmount} credits`, "error");
+    if (isNaN(bidAmount) || bidAmount <= 0) {
+      addToast("Enter a valid bid amount", "error");
       return;
     }
 
-    if (profile && bidAmount > profile.credits) {
-      addToast("Insufficient credits", "error");
+    if (!blindMode && bidAmount < minimumAmount) {
+      addToast(`Minimum bid is ${minimumAmount} credits`, "error");
       return;
     }
 
@@ -92,46 +94,52 @@ export function BidForm({
       <div className="flex items-center justify-between">
         <h3 className="font-display font-semibold text-rocket-text flex items-center gap-2">
           <Gavel size={18} className="text-rocket-gold" />
-          Place Your Bid
+          {blindMode ? "Place Blind Bid" : "Place Your Bid"}
         </h3>
-        <span className="font-mono text-sm text-rocket-muted">
-          Min: {minimumAmount} cr
-        </span>
+        {!blindMode && (
+          <span className="font-mono text-sm text-rocket-muted">
+            Min: {minimumAmount} cr
+          </span>
+        )}
       </div>
 
-      {profile && profile.credits < minimumAmount && (
+      {!blindMode && profile && profile.credits < minimumAmount && (
         <div className="flex items-center gap-2 rounded-lg bg-rocket-danger/10 border border-rocket-danger/20 px-3 py-2 text-sm text-rocket-danger">
           <AlertTriangle size={14} />
           Not enough credits ({profile.credits} available)
         </div>
       )}
 
-      <div className="flex gap-2">
-        {[100, 250, 500, 1000].map((inc) => (
-          <button
-            key={inc}
-            type="button"
-            onClick={() => onAmountChange(String(minimumAmount + inc))}
-            className="flex-1 rounded-lg border border-rocket-border bg-rocket-bg py-1.5 text-xs font-mono text-rocket-muted hover:border-rocket-gold hover:text-rocket-gold transition-colors"
-          >
-            +{inc}
-          </button>
-        ))}
-      </div>
+      {!blindMode && (
+        <div className="flex gap-2">
+          {[100, 250, 500, 1000].map((inc) => (
+            <button
+              key={inc}
+              type="button"
+              onClick={() => onAmountChange(String(minimumAmount + inc))}
+              className="flex-1 rounded-lg border border-rocket-border bg-rocket-bg py-1.5 text-xs font-mono text-rocket-muted hover:border-rocket-gold hover:text-rocket-gold transition-colors"
+            >
+              +{inc}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-3">
         <Input
           type="number"
-          placeholder={`${minimumAmount}`}
+          placeholder={blindMode ? "Enter your blind bid" : `${minimumAmount}`}
           value={amount}
           onChange={(e) => onAmountChange(e.target.value)}
-          min={minimumAmount}
+          min={blindMode ? 1 : minimumAmount}
           className="font-mono"
         />
         <Button
           type="submit"
           disabled={
-            submitting || (profile ? profile.credits < minimumAmount : true)
+            submitting ||
+            (profile ? profile.credits <= 0 : true) ||
+            (!blindMode && profile ? profile.credits < minimumAmount : false)
           }
           className="shrink-0"
         >

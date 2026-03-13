@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { History, Gavel, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { History, Gavel, ArrowUpRight, ArrowDownLeft, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/hooks/useUser";
 import { Badge } from "@/components/ui/Badge";
@@ -105,7 +105,8 @@ export default function BidHistory() {
         created_at: bid.created_at,
         auction_title: auctionMap[bid.auction_id]?.title ?? "Unknown Auction",
         auction_status: auctionMap[bid.auction_id]?.status ?? "unknown",
-        current_winner_id: auctionMap[bid.auction_id]?.current_winner_id ?? null,
+        current_winner_id:
+          auctionMap[bid.auction_id]?.current_winner_id ?? null,
         current_bid: auctionMap[bid.auction_id]?.current_bid ?? 0,
       }));
 
@@ -127,6 +128,7 @@ export default function BidHistory() {
     bid_deduct: { label: "Credits Reserved", color: "gold" },
     bid_refund: { label: "Reservation Released", color: "teal" },
     winner_deduct: { label: "Winner Deduction", color: "gold" },
+    mining: { label: "Mining Bonus", color: "gold" },
   };
 
   return (
@@ -196,7 +198,9 @@ export default function BidHistory() {
                   {(() => {
                     const bidStatus = getBidStatus(bid, user?.id ?? "");
                     return (
-                      <Badge variant={bidStatus.variant}>{bidStatus.label}</Badge>
+                      <Badge variant={bidStatus.variant}>
+                        {bidStatus.label}
+                      </Badge>
                     );
                   })()}
                 </div>
@@ -220,6 +224,7 @@ export default function BidHistory() {
                 color: "muted" as const,
               };
               const isPositive = tx.amount > 0;
+              const isMining = tx.type === "mining";
 
               return (
                 <motion.div
@@ -232,19 +237,30 @@ export default function BidHistory() {
                   <div className="flex items-center gap-3">
                     <div
                       className={`rounded-lg p-2 ${
-                        isPositive
-                          ? "bg-rocket-teal/10 text-rocket-teal"
-                          : "bg-rocket-danger/10 text-rocket-danger"
+                        isMining
+                          ? "bg-purple-500/15 text-purple-400"
+                          : isPositive
+                            ? "bg-rocket-teal/10 text-rocket-teal"
+                            : "bg-rocket-danger/10 text-rocket-danger"
                       }`}
                     >
-                      {isPositive ? (
+                      {isMining ? (
+                        <Zap size={16} />
+                      ) : isPositive ? (
                         <ArrowDownLeft size={16} />
                       ) : (
                         <ArrowUpRight size={16} />
                       )}
                     </div>
                     <div className="space-y-1">
-                      <Badge variant={typeInfo.color}>{typeInfo.label}</Badge>
+                      {isMining ? (
+                        <span className="inline-flex items-center rounded-full border border-purple-500/30 bg-purple-500/15 px-2.5 py-0.5 text-xs font-medium text-purple-400">
+                          <Zap size={11} className="mr-1" />
+                          {typeInfo.label}
+                        </span>
+                      ) : (
+                        <Badge variant={typeInfo.color}>{typeInfo.label}</Badge>
+                      )}
                       {tx.note && (
                         <p className="text-xs text-rocket-muted">{tx.note}</p>
                       )}
@@ -253,7 +269,11 @@ export default function BidHistory() {
                   <div className="text-right space-y-1">
                     <p
                       className={`font-mono text-sm font-semibold ${
-                        isPositive ? "text-rocket-teal" : "text-rocket-danger"
+                        isMining
+                          ? "text-purple-400"
+                          : isPositive
+                            ? "text-rocket-teal"
+                            : "text-rocket-danger"
                       }`}
                     >
                       {isPositive ? "+" : ""}

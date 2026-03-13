@@ -51,20 +51,43 @@ function AuctionDetail({
   const { timeLeft, isUrgent, isExpired } = useCountdown(auction.end_time);
   const isWinner = auction.current_winner_id === userId;
   const { triggerReaction } = useReactionToast();
+  const isBlindLive = auction.blind_mode && auction.status !== "closed";
 
   const [bidAmount, setBidAmount] = useState("");
+  const [showAntiSnipeBanner, setShowAntiSnipeBanner] = useState(false);
 
-  // Detect bidding war: check if 2 users have 3+ bids each in the last 60 seconds
+  // War mode: same two bidders alternate at least 3 exchanges within 60 seconds.
   const now = Date.now();
-  const recentBids = bids.filter(
-    (b) => now - new Date(b.created_at).getTime() <= 60000,
+  const recentBids = [...bids]
+    .filter((b) => now - new Date(b.created_at).getTime() <= 60000)
+    .sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+
+  const pairExchangeMap: Record<
+    string,
+    { exchanges: number; lastExchange: number }
+  > = {};
+  for (let i = 1; i < recentBids.length; i++) {
+    const prev = recentBids[i - 1];
+    const curr = recentBids[i];
+    if (prev.bidder_id === curr.bidder_id) continue;
+
+    const pairKey = [prev.bidder_id, curr.bidder_id].sort().join("::");
+    const exchangeAt = new Date(curr.created_at).getTime();
+
+    if (!pairExchangeMap[pairKey]) {
+      pairExchangeMap[pairKey] = { exchanges: 0, lastExchange: exchangeAt };
+    }
+
+    pairExchangeMap[pairKey].exchanges += 1;
+    pairExchangeMap[pairKey].lastExchange = exchangeAt;
+  }
+
+  const isWarMode = Object.values(pairExchangeMap).some(
+    (pair) => pair.exchanges >= 3 && now - pair.lastExchange <= 60000,
   );
-  const bidderCounts: Record<string, number> = {};
-  recentBids.forEach((b) => {
-    bidderCounts[b.bidder_id] = (bidderCounts[b.bidder_id] || 0) + 1;
-  });
-  const warParticipants = Object.values(bidderCounts).filter((c) => c >= 3);
-  const isWarMode = warParticipants.length >= 2;
 
   const didInitReactionRef = useRef(false);
   const prevStatusRef = useRef(auction.status);
@@ -119,6 +142,9 @@ function AuctionDetail({
 
     if (scenario) {
       triggerReaction(scenario);
+      if (scenario === "anti_snipe") {
+        setShowAntiSnipeBanner(true);
+      }
     }
 
     prevStatusRef.current = auction.status;
@@ -135,6 +161,16 @@ function AuctionDetail({
     triggerReaction,
     userId,
   ]);
+
+  useEffect(() => {
+    if (!showAntiSnipeBanner) return;
+
+    const timer = setTimeout(() => {
+      setShowAntiSnipeBanner(false);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [showAntiSnipeBanner]);
 
   return (
     <div className="space-y-6">
@@ -155,6 +191,18 @@ function AuctionDetail({
           className="flex items-center justify-center gap-2 rounded-xl border border-rocket-danger/60 bg-rocket-danger/10 py-3 text-base font-bold text-rocket-danger animate-pulse"
         >
           🔥 Bidding War Active 🔥
+        </motion.div>
+      )}
+
+      {showAntiSnipeBanner && (
+        <motion.div
+          key="anti-snipe-banner"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          className="flex items-center justify-center gap-2 rounded-xl border border-rocket-teal/60 bg-rocket-teal/10 py-3 text-base font-bold text-rocket-teal"
+        >
+          ⏰ Auction Extended by 30s
         </motion.div>
       )}
 
@@ -226,9 +274,20 @@ function AuctionDetail({
                   <p className="text-xs text-rocket-muted uppercase tracking-wider">
                     Current Bid
                   </p>
-                  <p className="font-mono text-2xl font-bold text-rocket-gold mt-1">
-                    {auction.current_bid || auction.min_bid} cr
-                  </p>
+                  {isBlindLive ? (
+                    <>
+                      <p className="font-mono text-2xl font-bold text-rocket-dim mt-1">
+                        Hidden
+                      </p>
+                      <p className="text-xs text-rocket-muted mt-1">
+                        {bids.length} bid{bids.length === 1 ? "" : "s"} placed
+                      </p>
+                    </>
+                  ) : (
+                    <p className="font-mono text-2xl font-bold text-rocket-gold mt-1">
+                      {auction.current_bid || auction.min_bid} cr
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-rocket-muted uppercase tracking-wider">
@@ -295,7 +354,7 @@ function AuctionDetail({
 
         {/* Sidebar */}
         <div className="space-y-4">
-          {auction.status === "active" && !isExpired && (
+          {auction.status === "active" && !isExpired && !isBlindLive && (
             <BidSuggestions
               bids={bids}
               currentBid={auction.current_bid}
@@ -312,6 +371,7 @@ function AuctionDetail({
             minBid={auction.min_bid}
             status={auction.status}
             isExpired={isExpired}
+            blindMode={isBlindLive}
             amount={bidAmount}
             onAmountChange={setBidAmount}
           />
