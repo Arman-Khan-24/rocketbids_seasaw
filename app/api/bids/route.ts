@@ -256,10 +256,7 @@ export async function POST(request: NextRequest) {
     if (!needsLegacyFallback) {
       return NextResponse.json(
         {
-          error: dbError(
-            "Failed to store reservation",
-            reservationUpsertError,
-          ),
+          error: dbError("Failed to store reservation", reservationUpsertError),
         },
         { status: 500 },
       );
@@ -276,10 +273,7 @@ export async function POST(request: NextRequest) {
     if (reservationFindError) {
       return NextResponse.json(
         {
-          error: dbError(
-            "Failed to store reservation",
-            reservationFindError,
-          ),
+          error: dbError("Failed to store reservation", reservationFindError),
         },
         { status: 500 },
       );
@@ -379,7 +373,12 @@ export async function POST(request: NextRequest) {
 
   if (auctionUpdateError) {
     return NextResponse.json(
-      { error: dbError("Failed to update auction after bid", auctionUpdateError) },
+      {
+        error: dbError(
+          "Failed to update auction after bid",
+          auctionUpdateError,
+        ),
+      },
       { status: 500 },
     );
   }

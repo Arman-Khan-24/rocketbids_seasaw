@@ -301,7 +301,8 @@ export default function AdminAuctions() {
           <div className="space-y-3 md:hidden">
             {filtered.map((auction, idx) => {
               const bidCount = auction.bids?.[0]?.count ?? 0;
-              const isWar = auction.status === "active" && warAuctions.has(auction.id);
+              const isWar =
+                auction.status === "active" && warAuctions.has(auction.id);
 
               return (
                 <motion.div
@@ -329,7 +330,9 @@ export default function AdminAuctions() {
                       <p className="truncate text-sm font-semibold text-rocket-text">
                         {auction.title}
                       </p>
-                      <p className="text-xs text-rocket-muted mt-0.5">{auction.category}</p>
+                      <p className="text-xs text-rocket-muted mt-0.5">
+                        {auction.category}
+                      </p>
                     </div>
                   </div>
 
@@ -353,17 +356,23 @@ export default function AdminAuctions() {
                     <div className="rounded-lg border border-rocket-border bg-rocket-bg px-3 py-2">
                       <p className="text-rocket-dim">Current bid</p>
                       <p className="font-mono text-sm text-rocket-gold mt-0.5">
-                        {formatCredits(auction.current_bid || auction.min_bid)} cr
+                        {formatCredits(auction.current_bid || auction.min_bid)}{" "}
+                        cr
                       </p>
                     </div>
                     <div className="rounded-lg border border-rocket-border bg-rocket-bg px-3 py-2">
                       <p className="text-rocket-dim">Bids</p>
-                      <p className="font-mono text-sm text-rocket-text mt-0.5">{bidCount}</p>
+                      <p className="font-mono text-sm text-rocket-text mt-0.5">
+                        {bidCount}
+                      </p>
                     </div>
                   </div>
 
                   <div className="mt-3">
-                    <TimeRemaining endTime={auction.end_time} status={auction.status} />
+                    <TimeRemaining
+                      endTime={auction.end_time}
+                      status={auction.status}
+                    />
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
@@ -376,7 +385,9 @@ export default function AdminAuctions() {
                         className="w-full"
                       >
                         <Trophy size={14} className="mr-1" />
-                        {declaring === auction.id ? "Closing..." : "Close + Winner"}
+                        {declaring === auction.id
+                          ? "Closing..."
+                          : "Close + Winner"}
                       </Button>
                     )}
                     <Button
@@ -394,148 +405,150 @@ export default function AdminAuctions() {
           </div>
 
           <div className="hidden rounded-xl border border-rocket-border overflow-hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[800px]">
-            <thead>
-              <tr className="border-b border-rocket-border bg-rocket-card">
-                <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
-                  Auction
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
-                  Category
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
-                  Current Bid
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
-                  Bids
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
-                  Time Remaining
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-rocket-muted uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-rocket-border">
-              {filtered.map((auction, idx) => {
-                const bidCount = auction.bids?.[0]?.count ?? 0;
-                const isWar =
-                  auction.status === "active" && warAuctions.has(auction.id);
+            <table className="w-full min-w-[800px]">
+              <thead>
+                <tr className="border-b border-rocket-border bg-rocket-card">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
+                    Auction
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
+                    Category
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
+                    Current Bid
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
+                    Bids
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-rocket-muted uppercase tracking-wider">
+                    Time Remaining
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-rocket-muted uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-rocket-border">
+                {filtered.map((auction, idx) => {
+                  const bidCount = auction.bids?.[0]?.count ?? 0;
+                  const isWar =
+                    auction.status === "active" && warAuctions.has(auction.id);
 
-                return (
-                  <motion.tr
-                    key={auction.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: idx * 0.02 }}
-                    className={`bg-rocket-bg hover:bg-rocket-card/50 transition-colors ${
-                      isWar ? "border-l-2 border-l-rocket-danger" : ""
-                    }`}
-                  >
-                    {/* Image + Title */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {auction.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={auction.image_url}
-                            alt={auction.title}
-                            className="h-10 w-10 rounded-lg object-cover shrink-0"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-lg bg-rocket-card flex items-center justify-center shrink-0">
-                            <Gavel size={16} className="text-rocket-dim" />
-                          </div>
-                        )}
-                        <p className="text-sm font-medium text-rocket-text truncate max-w-[180px]">
-                          {auction.title}
-                        </p>
-                      </div>
-                    </td>
+                  return (
+                    <motion.tr
+                      key={auction.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: idx * 0.02 }}
+                      className={`bg-rocket-bg hover:bg-rocket-card/50 transition-colors ${
+                        isWar ? "border-l-2 border-l-rocket-danger" : ""
+                      }`}
+                    >
+                      {/* Image + Title */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {auction.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={auction.image_url}
+                              alt={auction.title}
+                              className="h-10 w-10 rounded-lg object-cover shrink-0"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg bg-rocket-card flex items-center justify-center shrink-0">
+                              <Gavel size={16} className="text-rocket-dim" />
+                            </div>
+                          )}
+                          <p className="text-sm font-medium text-rocket-text truncate max-w-[180px]">
+                            {auction.title}
+                          </p>
+                        </div>
+                      </td>
 
-                    {/* Category */}
-                    <td className="px-4 py-3">
-                      <span className="text-xs text-rocket-muted">
-                        {auction.category}
-                      </span>
-                    </td>
+                      {/* Category */}
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-rocket-muted">
+                          {auction.category}
+                        </span>
+                      </td>
 
-                    {/* Status + Badges */}
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {statusBadgeMap[auction.status]}
-                        {auction.blind_mode && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-400">
-                            <Eye size={10} />
-                            Blind
-                          </span>
-                        )}
-                        {isWar && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-rocket-danger/30 bg-rocket-danger/15 px-2 py-0.5 text-xs font-medium text-rocket-danger animate-pulse">
-                            <Swords size={10} />
-                            War
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                      {/* Status + Badges */}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {statusBadgeMap[auction.status]}
+                          {auction.blind_mode && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-400">
+                              <Eye size={10} />
+                              Blind
+                            </span>
+                          )}
+                          {isWar && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-rocket-danger/30 bg-rocket-danger/15 px-2 py-0.5 text-xs font-medium text-rocket-danger animate-pulse">
+                              <Swords size={10} />
+                              War
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* Current Bid */}
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-sm text-rocket-gold font-semibold">
-                        {formatCredits(auction.current_bid || auction.min_bid)}{" "}
-                        cr
-                      </span>
-                    </td>
+                      {/* Current Bid */}
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-sm text-rocket-gold font-semibold">
+                          {formatCredits(
+                            auction.current_bid || auction.min_bid,
+                          )}{" "}
+                          cr
+                        </span>
+                      </td>
 
-                    {/* Bids Count */}
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-sm text-rocket-text">
-                        {bidCount}
-                      </span>
-                    </td>
+                      {/* Bids Count */}
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-sm text-rocket-text">
+                          {bidCount}
+                        </span>
+                      </td>
 
-                    {/* Time Remaining */}
-                    <td className="px-4 py-3">
-                      <TimeRemaining
-                        endTime={auction.end_time}
-                        status={auction.status}
-                      />
-                    </td>
+                      {/* Time Remaining */}
+                      <td className="px-4 py-3">
+                        <TimeRemaining
+                          endTime={auction.end_time}
+                          status={auction.status}
+                        />
+                      </td>
 
-                    {/* Actions */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        {auction.status === "active" && (
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          {auction.status === "active" && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={declaring === auction.id}
+                              onClick={() => declareWinner(auction.id)}
+                            >
+                              <Trophy size={14} className="mr-1" />
+                              {declaring === auction.id
+                                ? "Closing..."
+                                : "Close + Winner"}
+                            </Button>
+                          )}
                           <Button
-                            variant="secondary"
+                            variant="ghost"
                             size="sm"
-                            disabled={declaring === auction.id}
-                            onClick={() => declareWinner(auction.id)}
+                            onClick={() => deleteAuction(auction.id)}
                           >
-                            <Trophy size={14} className="mr-1" />
-                            {declaring === auction.id
-                              ? "Closing..."
-                              : "Close + Winner"}
+                            <Trash2 size={14} className="text-rocket-danger" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteAuction(auction.id)}
-                        >
-                          <Trash2 size={14} className="text-rocket-danger" />
-                        </Button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </>
       )}

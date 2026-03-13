@@ -75,9 +75,7 @@ function EndingSoonCard({ auction }: { auction: EndingSoonAuction }) {
         />
         <span
           className={`font-mono text-sm ${
-            isUrgent
-              ? "text-rocket-danger font-semibold"
-              : "text-rocket-muted"
+            isUrgent ? "text-rocket-danger font-semibold" : "text-rocket-muted"
           }`}
         >
           {timeLeft}
@@ -102,8 +100,8 @@ export default function AdminDashboard() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [activeRes, biddersRes, bidsTodayRes, creditsRes] =
-      await Promise.all([
+    const [activeRes, biddersRes, bidsTodayRes, creditsRes] = await Promise.all(
+      [
         supabase
           .from("auctions")
           .select("*", { count: "exact", head: true })
@@ -116,15 +114,13 @@ export default function AdminDashboard() {
           .from("bids")
           .select("*", { count: "exact", head: true })
           .gte("created_at", today.toISOString()),
-        supabase
-          .from("profiles")
-          .select("credits")
-          .eq("role", "bidder"),
-      ]);
+        supabase.from("profiles").select("credits").eq("role", "bidder"),
+      ],
+    );
 
     const totalCredits = (creditsRes.data ?? []).reduce(
       (sum, p) => sum + (p.credits || 0),
-      0
+      0,
     );
 
     setStats({
@@ -139,7 +135,7 @@ export default function AdminDashboard() {
     const { data } = await supabase
       .from("bids")
       .select(
-        "id, amount, created_at, bidder:bidder_id(full_name), auction:auction_id(title)"
+        "id, amount, created_at, bidder:bidder_id(full_name), auction:auction_id(title)",
       )
       .order("created_at", { ascending: false })
       .limit(10);
@@ -194,7 +190,7 @@ export default function AdminDashboard() {
 
   const fetchEndingSoon = useCallback(async () => {
     const twoHoursFromNow = new Date(
-      Date.now() + 2 * 60 * 60 * 1000
+      Date.now() + 2 * 60 * 60 * 1000,
     ).toISOString();
 
     const { data } = await supabase
@@ -240,7 +236,7 @@ export default function AdminDashboard() {
           fetchStats();
           fetchEndingSoon();
           fetchSnipers();
-        }
+        },
       )
       .subscribe();
 
@@ -390,13 +386,8 @@ export default function AdminDashboard() {
 
           {snipers.length === 0 ? (
             <div className="text-center py-8">
-              <Crosshair
-                size={32}
-                className="text-rocket-dim mx-auto mb-2"
-              />
-              <p className="text-sm text-rocket-muted">
-                No snipers detected
-              </p>
+              <Crosshair size={32} className="text-rocket-dim mx-auto mb-2" />
+              <p className="text-sm text-rocket-muted">No snipers detected</p>
               <p className="text-xs text-rocket-dim mt-1">
                 Updates every 30 seconds
               </p>
@@ -412,10 +403,7 @@ export default function AdminDashboard() {
                 >
                   <div className="flex items-start gap-3">
                     <div className="rounded-lg bg-rocket-danger/15 p-2 shrink-0">
-                      <AlertTriangle
-                        size={16}
-                        className="text-rocket-danger"
-                      />
+                      <AlertTriangle size={16} className="text-rocket-danger" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -429,8 +417,7 @@ export default function AdminDashboard() {
                         {sniper.snipeCount !== 1 ? "s" : ""} detected
                       </p>
                       <p className="text-xs text-rocket-dim">
-                        Last snipe:{" "}
-                        {formatDistanceToNow(sniper.lastBidTime)}
+                        Last snipe: {formatDistanceToNow(sniper.lastBidTime)}
                       </p>
                     </div>
                   </div>

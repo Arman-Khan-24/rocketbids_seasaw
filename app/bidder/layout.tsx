@@ -331,7 +331,9 @@ export default function BidderLayout({ children }: { children: ReactNode }) {
               </p>
             </div>
 
-            <div className={`${tabletExpanded ? "md:block" : "md:hidden group-hover:block"} lg:block`}>
+            <div
+              className={`${tabletExpanded ? "md:block" : "md:hidden group-hover:block"} lg:block`}
+            >
               <ThemeToggle />
             </div>
 

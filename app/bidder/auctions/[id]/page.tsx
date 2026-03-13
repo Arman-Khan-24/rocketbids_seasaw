@@ -176,7 +176,7 @@ function AuctionDetail({
     <div className="space-y-6">
       <Link
         href="/bidder/browse"
-        className="inline-flex items-center gap-2 text-sm text-rocket-muted hover:text-rocket-text transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-rocket-muted transition-colors hover:text-rocket-text"
       >
         <ArrowLeft size={16} />
         Back to Browse
@@ -206,19 +206,19 @@ function AuctionDetail({
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3">
-        <div className="order-1 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:min-h-[560px] lg:grid-cols-[35fr_35fr_30fr] lg:items-stretch">
+        <div className="order-1">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`rounded-xl border bg-rocket-card overflow-hidden ${
+            className={`h-full min-h-[260px] overflow-hidden rounded-xl border bg-rocket-bg ${
               isWarMode
                 ? "border-rocket-danger animate-pulse-war"
                 : "border-rocket-border"
             }`}
           >
             {auction.image_url ? (
-              <div className="aspect-video bg-rocket-bg">
+              <div className="h-full w-full bg-rocket-bg">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={auction.image_url}
@@ -227,73 +227,77 @@ function AuctionDetail({
                 />
               </div>
             ) : (
-              <div className="aspect-video bg-gradient-to-br from-rocket-gold/10 to-rocket-teal/10 flex items-center justify-center">
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-rocket-gold/10 to-rocket-teal/10">
                 <Gavel className="h-16 w-16 text-rocket-dim" />
               </div>
             )}
+          </motion.div>
+        </div>
 
-            <div className="p-4 md:p-6 space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h1 className="font-display text-2xl font-bold text-rocket-text">
-                    {auction.title}
-                  </h1>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge
-                      variant={
-                        auction.status === "active"
-                          ? "teal"
-                          : auction.status === "upcoming"
-                            ? "gold"
-                            : "muted"
-                      }
-                    >
-                      {auction.status}
+        <div className="order-2">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`flex h-full min-h-[260px] flex-col rounded-xl border bg-rocket-card p-4 md:p-6 ${
+              isWarMode
+                ? "border-rocket-danger animate-pulse-war"
+                : "border-rocket-border"
+            }`}
+          >
+            <div className="space-y-4">
+              <div>
+                <h1 className="font-display text-2xl font-bold text-rocket-text">
+                  {auction.title}
+                </h1>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant={
+                      auction.status === "active"
+                        ? "teal"
+                        : auction.status === "upcoming"
+                          ? "gold"
+                          : "muted"
+                    }
+                  >
+                    {auction.status}
+                  </Badge>
+                  <Badge variant="muted">{auction.category}</Badge>
+                  {auction.blind_mode && (
+                    <Badge variant="gold">
+                      <Eye size={10} className="mr-1" />
+                      Blind
                     </Badge>
-                    <Badge variant="muted">{auction.category}</Badge>
-                    {auction.blind_mode && (
-                      <Badge variant="gold">
-                        <Eye size={10} className="mr-1" />
-                        Blind
-                      </Badge>
-                    )}
-                    {isWarMode && (
-                      <Badge variant="danger">🔥 BIDDING WAR</Badge>
-                    )}
-                  </div>
+                  )}
+                  {isWarMode && <Badge variant="danger">🔥 BIDDING WAR</Badge>}
                 </div>
               </div>
 
-              <p className="text-rocket-muted text-sm leading-relaxed">
-                {auction.description || "No description provided."}
-              </p>
-
-              <div className="grid grid-cols-1 gap-4 pt-4 border-t border-rocket-border sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 border-t border-rocket-border pt-4 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs text-rocket-muted uppercase tracking-wider">
+                  <p className="text-xs uppercase tracking-wider text-rocket-muted">
                     Current Bid
                   </p>
                   {isBlindLive ? (
                     <>
-                      <p className="font-mono text-2xl font-bold text-rocket-dim mt-1">
+                      <p className="mt-1 font-mono text-2xl font-bold text-rocket-dim">
                         Hidden
                       </p>
-                      <p className="text-xs text-rocket-muted mt-1">
+                      <p className="mt-1 text-xs text-rocket-muted">
                         {bids.length} bid{bids.length === 1 ? "" : "s"} placed
                       </p>
                     </>
                   ) : (
-                    <p className="font-mono text-2xl font-bold text-rocket-gold mt-1">
+                    <p className="mt-1 font-mono text-2xl font-bold text-rocket-gold">
                       {auction.current_bid || auction.min_bid} cr
                     </p>
                   )}
                 </div>
                 <div>
-                  <p className="text-xs text-rocket-muted uppercase tracking-wider">
+                  <p className="text-xs uppercase tracking-wider text-rocket-muted">
                     Time Left
                   </p>
                   <p
-                    className={`font-mono text-2xl font-bold mt-1 flex items-center gap-2 ${
+                    className={`mt-1 flex items-center gap-2 font-mono text-2xl font-bold ${
                       isUrgent ? "text-rocket-danger" : "text-rocket-text"
                     }`}
                   >
@@ -302,19 +306,6 @@ function AuctionDetail({
                   </p>
                 </div>
               </div>
-
-              {isWinner && auction.status === "closed" && (
-                <motion.div
-                  initial={{ scale: 0.95 }}
-                  animate={{ scale: 1 }}
-                  className="flex items-center gap-3 rounded-lg bg-rocket-teal/10 border border-rocket-teal/30 px-4 py-3"
-                >
-                  <Trophy className="h-5 w-5 text-rocket-teal" />
-                  <span className="font-semibold text-rocket-teal">
-                    You won this auction!
-                  </span>
-                </motion.div>
-              )}
 
               <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                 <div>
@@ -330,48 +321,72 @@ function AuctionDetail({
                   </span>
                 </div>
               </div>
+
+              {isWinner && auction.status === "closed" && (
+                <motion.div
+                  initial={{ scale: 0.95 }}
+                  animate={{ scale: 1 }}
+                  className="flex items-center gap-3 rounded-lg border border-rocket-teal/30 bg-rocket-teal/10 px-4 py-3"
+                >
+                  <Trophy className="h-5 w-5 text-rocket-teal" />
+                  <span className="font-semibold text-rocket-teal">
+                    You won this auction!
+                  </span>
+                </motion.div>
+              )}
+
+              {auction.status === "active" && !isExpired && !isBlindLive && (
+                <BidSuggestions
+                  bids={bids}
+                  currentBid={auction.current_bid}
+                  minBid={auction.min_bid}
+                  endTime={auction.end_time}
+                  warMode={isWarMode}
+                  creditBalance={creditBalance}
+                  onSelect={(n) => setBidAmount(String(n))}
+                />
+              )}
+            </div>
+
+            <div className="mt-4">
+              <BidForm
+                auctionId={auction.id}
+                currentBid={auction.current_bid}
+                minBid={auction.min_bid}
+                status={auction.status}
+                isExpired={isExpired}
+                blindMode={isBlindLive}
+                amount={bidAmount}
+                onAmountChange={setBidAmount}
+              />
             </div>
           </motion.div>
         </div>
 
-        <div className="order-2 space-y-4 lg:order-3">
-          {auction.status === "active" && !isExpired && !isBlindLive && (
-            <BidSuggestions
-              bids={bids}
-              currentBid={auction.current_bid}
-              minBid={auction.min_bid}
-              endTime={auction.end_time}
-              warMode={isWarMode}
-              creditBalance={creditBalance}
-              onSelect={(n) => setBidAmount(String(n))}
-            />
-          )}
-          <BidForm
-            auctionId={auction.id}
-            currentBid={auction.current_bid}
-            minBid={auction.min_bid}
-            status={auction.status}
-            isExpired={isExpired}
-            blindMode={isBlindLive}
-            amount={bidAmount}
-            onAmountChange={setBidAmount}
-          />
-        </div>
-
-        <div className="order-3 space-y-3 lg:order-2 lg:col-span-2">
-          <h2 className="font-display text-lg font-semibold text-rocket-text">
-            Bid History ({bids.length})
-          </h2>
-          {auction.blind_mode && auction.status === "active" ? (
-            <div className="rounded-xl border border-rocket-border bg-rocket-card p-6 text-center md:p-8">
-              <Eye className="h-8 w-8 text-rocket-dim mx-auto mb-2" />
-              <p className="text-rocket-muted text-sm">
-                Blind mode - bid history hidden until auction closes
-              </p>
+        <div className="order-3">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex h-full min-h-[260px] flex-col rounded-xl border border-rocket-border bg-rocket-card p-4 md:p-5"
+          >
+            <h2 className="font-display text-lg font-semibold text-rocket-text">
+              Live Bid Feed ({bids.length})
+            </h2>
+            <div className="mt-3 flex-1 overflow-y-auto pr-1">
+              {auction.blind_mode && auction.status === "active" ? (
+                <div className="flex h-full items-center justify-center rounded-xl border border-rocket-border bg-rocket-bg p-6 text-center md:p-8">
+                  <div>
+                    <Eye className="mx-auto mb-2 h-8 w-8 text-rocket-dim" />
+                    <p className="text-sm text-rocket-muted">
+                      Blind mode - bid history hidden until auction closes
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <BidList bids={bids} currentUserId={userId} />
+              )}
             </div>
-          ) : (
-            <BidList bids={bids} currentUserId={userId} />
-          )}
+          </motion.div>
         </div>
       </div>
     </div>

@@ -120,9 +120,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   const mobileNavLinks = adminLinks.filter((link) =>
-    ["/admin/dashboard", "/admin/auctions", "/admin/bidders", "/admin/monitor"].includes(
-      link.href,
-    ),
+    [
+      "/admin/dashboard",
+      "/admin/auctions",
+      "/admin/bidders",
+      "/admin/monitor",
+    ].includes(link.href),
   );
 
   if (checking) {
@@ -198,7 +201,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="space-y-2 border-t border-rocket-border pt-4">
-            <div className={`${tabletExpanded ? "md:block" : "md:hidden group-hover:block"} lg:block`}>
+            <div
+              className={`${tabletExpanded ? "md:block" : "md:hidden group-hover:block"} lg:block`}
+            >
               <ThemeToggle />
             </div>
             <button
