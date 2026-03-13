@@ -7,6 +7,10 @@ const ANTI_SNIPE_WINDOW_MS = 60_000;
 const ANTI_SNIPE_EXTENSION_MS = 30_000;
 const BID_ACTIVITY_BONUS = 2;
 
+function dbError(step: string, error?: { message?: string } | null) {
+  return `${step}${error?.message ? `: ${error.message}` : ""}`;
+}
+
 export async function POST(request: NextRequest) {
   const supabase = createClient();
   const {
@@ -48,7 +52,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (auctionError || !auction) {
-    return NextResponse.json({ error: "Auction not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: dbError("Auction not found", auctionError) },
+      { status: 404 },
+    );
   }
 
   if (auction.status !== "active") {
@@ -86,7 +93,7 @@ export async function POST(request: NextRequest) {
 
   if (profileError || !profile) {
     return NextResponse.json(
-      { error: "Failed to fetch bidder profile" },
+      { error: dbError("Failed to fetch bidder profile", profileError) },
       { status: 500 },
     );
   }
@@ -132,7 +139,12 @@ export async function POST(request: NextRequest) {
 
     if (prevProfileError || !prevProfile) {
       return NextResponse.json(
-        { error: "Failed to release previous reservation" },
+        {
+          error: dbError(
+            "Failed to release previous reservation",
+            prevProfileError,
+          ),
+        },
         { status: 500 },
       );
     }
@@ -153,7 +165,12 @@ export async function POST(request: NextRequest) {
 
     if (releaseError) {
       return NextResponse.json(
-        { error: "Failed to release previous reservation" },
+        {
+          error: dbError(
+            "Failed to release previous reservation",
+            releaseError,
+          ),
+        },
         { status: 500 },
       );
     }
@@ -196,7 +213,7 @@ export async function POST(request: NextRequest) {
 
     if (reserveUpdateError) {
       return NextResponse.json(
-        { error: "Failed to reserve credits" },
+        { error: dbError("Failed to reserve credits", reserveUpdateError) },
         { status: 500 },
       );
     }
@@ -220,40 +237,125 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { error: reservationError } = await serviceClient
+  const reservationPayload = {
+    user_id: user.id,
+    auction_id,
+    amount,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: reservationUpsertError } = await serviceClient
     .from("credit_reservations")
-    .upsert(
-      {
-        user_id: user.id,
-        auction_id,
-        amount,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,auction_id" },
+    .upsert(reservationPayload, { onConflict: "user_id,auction_id" });
+
+  if (reservationUpsertError) {
+    const needsLegacyFallback = /on conflict|no unique|42p10/i.test(
+      reservationUpsertError.message ?? "",
     );
 
-  if (reservationError) {
-    return NextResponse.json(
-      { error: "Failed to store reservation" },
-      { status: 500 },
-    );
+    if (!needsLegacyFallback) {
+      return NextResponse.json(
+        {
+          error: dbError(
+            "Failed to store reservation",
+            reservationUpsertError,
+          ),
+        },
+        { status: 500 },
+      );
+    }
+
+    const { data: existingReservationRow, error: reservationFindError } =
+      await serviceClient
+        .from("credit_reservations")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("auction_id", auction_id)
+        .maybeSingle();
+
+    if (reservationFindError) {
+      return NextResponse.json(
+        {
+          error: dbError(
+            "Failed to store reservation",
+            reservationFindError,
+          ),
+        },
+        { status: 500 },
+      );
+    }
+
+    if (existingReservationRow?.id) {
+      const { error: reservationUpdateError } = await serviceClient
+        .from("credit_reservations")
+        .update({ amount, updated_at: reservationPayload.updated_at })
+        .eq("id", existingReservationRow.id);
+
+      if (reservationUpdateError) {
+        return NextResponse.json(
+          {
+            error: dbError(
+              "Failed to store reservation",
+              reservationUpdateError,
+            ),
+          },
+          { status: 500 },
+        );
+      }
+    } else {
+      const { error: reservationInsertError } = await serviceClient
+        .from("credit_reservations")
+        .insert(reservationPayload);
+
+      if (reservationInsertError) {
+        return NextResponse.json(
+          {
+            error: dbError(
+              "Failed to store reservation",
+              reservationInsertError,
+            ),
+          },
+          { status: 500 },
+        );
+      }
+    }
   }
 
   // Determine if this bid qualifies as a snipe BEFORE any end_time extension
   const timeToEnd = endTime.getTime() - now.getTime();
   const isSnipe = timeToEnd > 0 && timeToEnd <= ANTI_SNIPE_WINDOW_MS;
 
-  // Insert the bid record
-  const { error: bidError } = await serviceClient.from("bids").insert({
+  // Insert the bid record. If older environments are missing `is_snipe`,
+  // retry without that field so bidding remains functional.
+  let bidError: { message?: string } | null = null;
+
+  const bidInsertWithSnipe = await serviceClient.from("bids").insert({
     auction_id,
     bidder_id: user.id,
     amount,
     is_snipe: isSnipe,
   });
 
+  bidError = bidInsertWithSnipe.error;
+
+  if (
+    bidError &&
+    /is_snipe|column .* does not exist|schema cache/i.test(
+      bidError.message ?? "",
+    )
+  ) {
+    const bidInsertFallback = await serviceClient.from("bids").insert({
+      auction_id,
+      bidder_id: user.id,
+      amount,
+    });
+    bidError = bidInsertFallback.error;
+  }
+
   if (bidError) {
+    console.error("Failed to record bid", bidError);
     return NextResponse.json(
-      { error: "Failed to record bid" },
+      { error: bidError.message || "Failed to record bid" },
       { status: 500 },
     );
   }
@@ -270,7 +372,17 @@ export async function POST(request: NextRequest) {
     updateData.end_time = newEndTime.toISOString();
   }
 
-  await serviceClient.from("auctions").update(updateData).eq("id", auction_id);
+  const { error: auctionUpdateError } = await serviceClient
+    .from("auctions")
+    .update(updateData)
+    .eq("id", auction_id);
+
+  if (auctionUpdateError) {
+    return NextResponse.json(
+      { error: dbError("Failed to update auction after bid", auctionUpdateError) },
+      { status: 500 },
+    );
+  }
 
   // Credit Mining: +2 credits for successful bid activity
   const { data: bonusProfile, error: bonusProfileError } = await serviceClient
