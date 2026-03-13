@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Gavel,
@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { StatCard } from "@/components/admin/StatCard";
 import { Badge } from "@/components/ui/Badge";
 import { PageLoader } from "@/components/ui/Spinner";
+import { useReactionToast } from "@/components/shared/ReactionToast";
 import { useCountdown } from "@/lib/hooks/useCountdown";
 import { formatDistanceToNow, formatCredits } from "@/lib/utils";
 
@@ -92,6 +93,9 @@ export default function AdminDashboard() {
   const [snipers, setSnipers] = useState<SniperUser[]>([]);
   const [endingSoon, setEndingSoon] = useState<EndingSoonAuction[]>([]);
   const [loading, setLoading] = useState(true);
+  const { triggerReaction } = useReactionToast();
+  const hasSniperHydratedRef = useRef(false);
+  const prevSniperIdsRef = useRef<Set<string>>(new Set());
   const supabase = createClient();
 
   const fetchStats = useCallback(async () => {
@@ -144,46 +148,34 @@ export default function AdminDashboard() {
   }, [supabase]);
 
   const fetchSnipers = useCallback(async () => {
-    const { data: bidsWithAuction } = await supabase
+    const { data: snipeBids } = await supabase
       .from("bids")
-      .select(
-        "id, bidder_id, created_at, auction:auction_id(end_time), bidder:bidder_id(full_name)"
-      );
+      .select("bidder_id, created_at, bidder:bidder_id(full_name)")
+      .eq("is_snipe", true);
+
+    interface SnipeBid {
+      bidder_id: string;
+      created_at: string;
+      bidder: { full_name: string } | null;
+    }
 
     const snipeMap: Record<
       string,
       { name: string; count: number; lastBidTime: string }
     > = {};
 
-    interface BidWithJoins {
-      id: string;
-      bidder_id: string;
-      created_at: string;
-      auction: { end_time: string } | null;
-      bidder: { full_name: string } | null;
-    }
-
-    (
-      (bidsWithAuction as unknown as BidWithJoins[]) ?? []
-    ).forEach((bid) => {
-      const bidTime = new Date(bid.created_at).getTime();
-      const auctionEnd = new Date(bid.auction?.end_time ?? 0).getTime();
-      if (bidTime >= auctionEnd - 60000) {
-        const id = bid.bidder_id;
-        if (!snipeMap[id]) {
-          snipeMap[id] = {
-            name: bid.bidder?.full_name ?? "Unknown",
-            count: 0,
-            lastBidTime: bid.created_at,
-          };
-        }
-        snipeMap[id].count++;
-        if (
-          new Date(bid.created_at) >
-          new Date(snipeMap[id].lastBidTime)
-        ) {
-          snipeMap[id].lastBidTime = bid.created_at;
-        }
+    ((snipeBids as unknown as SnipeBid[]) ?? []).forEach((bid) => {
+      const id = bid.bidder_id;
+      if (!snipeMap[id]) {
+        snipeMap[id] = {
+          name: bid.bidder?.full_name ?? "Unknown",
+          count: 0,
+          lastBidTime: bid.created_at,
+        };
+      }
+      snipeMap[id].count++;
+      if (new Date(bid.created_at) > new Date(snipeMap[id].lastBidTime)) {
+        snipeMap[id].lastBidTime = bid.created_at;
       }
     });
 
@@ -247,6 +239,7 @@ export default function AdminDashboard() {
           fetchLiveBids();
           fetchStats();
           fetchEndingSoon();
+          fetchSnipers();
         }
       )
       .subscribe();
@@ -254,7 +247,27 @@ export default function AdminDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, fetchLiveBids, fetchStats, fetchEndingSoon]);
+  }, [supabase, fetchLiveBids, fetchStats, fetchEndingSoon, fetchSnipers]);
+
+  useEffect(() => {
+    const currentSniperIds = new Set(snipers.map((s) => s.userId));
+
+    if (!hasSniperHydratedRef.current) {
+      hasSniperHydratedRef.current = true;
+      prevSniperIdsRef.current = currentSniperIds;
+      return;
+    }
+
+    const hasNewSniper = Array.from(currentSniperIds).some(
+      (id) => !prevSniperIdsRef.current.has(id),
+    );
+
+    if (hasNewSniper) {
+      triggerReaction("sniper_flagged");
+    }
+
+    prevSniperIdsRef.current = currentSniperIds;
+  }, [snipers, triggerReaction]);
 
   // Sniper radar polling every 30 seconds
   useEffect(() => {

@@ -111,6 +111,7 @@ create table public.bids (
   auction_id uuid references public.auctions(id) on delete cascade not null,
   bidder_id uuid references public.profiles(id) not null,
   amount integer not null,
+  is_snipe boolean not null default false,
   created_at timestamptz not null default now()
 );
 

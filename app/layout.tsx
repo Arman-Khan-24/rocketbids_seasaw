@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/shared/Toast";
+import { ReactionToastProvider } from "@/components/shared/ReactionToast";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
 export const metadata: Metadata = {
@@ -18,7 +19,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-rocket-bg text-rocket-text">
         <ThemeProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ReactionToastProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </ReactionToastProvider>
         </ThemeProvider>
       </body>
     </html>

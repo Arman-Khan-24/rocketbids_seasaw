@@ -59,4 +59,8 @@ alter table public.credit_transactions
   add constraint credit_transactions_type_check
   check (type in ('assign', 'bid_deduct', 'bid_refund', 'winner_deduct', 'mining'));
 
+-- Sniper flag: set true at bid insert time when bid lands in last 60s of auction
+alter table public.bids
+  add column if not exists is_snipe boolean not null default false;
+
 commit;

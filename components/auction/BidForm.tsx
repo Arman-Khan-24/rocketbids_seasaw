@@ -14,6 +14,8 @@ interface BidFormProps {
   minBid: number;
   status: string;
   isExpired: boolean;
+  amount: string;
+  onAmountChange: (v: string) => void;
 }
 
 export function BidForm({
@@ -22,10 +24,11 @@ export function BidForm({
   minBid,
   status,
   isExpired,
+  amount,
+  onAmountChange,
 }: BidFormProps) {
   const { profile } = useUser();
   const { addToast } = useToast();
-  const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const minimumAmount = currentBid > 0 ? currentBid + 1 : minBid;
@@ -58,7 +61,7 @@ export function BidForm({
         addToast(data.error || "Failed to place bid", "error");
       } else {
         addToast(`Bid of ${bidAmount} credits placed!`, "success");
-        setAmount("");
+        onAmountChange("");
       }
     } catch {
       addToast("Network error — try again", "error");
@@ -108,7 +111,7 @@ export function BidForm({
           <button
             key={inc}
             type="button"
-            onClick={() => setAmount(String(minimumAmount + inc))}
+            onClick={() => onAmountChange(String(minimumAmount + inc))}
             className="flex-1 rounded-lg border border-rocket-border bg-rocket-bg py-1.5 text-xs font-mono text-rocket-muted hover:border-rocket-gold hover:text-rocket-gold transition-colors"
           >
             +{inc}
@@ -121,7 +124,7 @@ export function BidForm({
           type="number"
           placeholder={`${minimumAmount}`}
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => onAmountChange(e.target.value)}
           min={minimumAmount}
           className="font-mono"
         />

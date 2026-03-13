@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Clock, Gavel, Trophy, Eye, ArrowLeft } from "lucide-react";
@@ -8,33 +9,50 @@ import { useAuction } from "@/lib/hooks/useAuctions";
 import { useCountdown } from "@/lib/hooks/useCountdown";
 import { useUser } from "@/lib/hooks/useUser";
 import { BidForm } from "@/components/auction/BidForm";
+import { BidSuggestions } from "@/components/auction/BidSuggestions";
 import { BidList } from "@/components/auction/BidList";
 import { Badge } from "@/components/ui/Badge";
 import { PageLoader } from "@/components/ui/Spinner";
+import {
+  useReactionToast,
+  type ReactionScenario,
+} from "@/components/shared/ReactionToast";
 import { formatDate } from "@/lib/utils";
 
 export default function AuctionDetailPage() {
   const params = useParams();
   const auctionId = params.id as string;
   const { auction, bids, loading } = useAuction(auctionId);
-  const { user } = useUser();
+  const { user, profile } = useUser();
 
   if (loading || !auction) return <PageLoader />;
 
-  return <AuctionDetail auction={auction} bids={bids} userId={user?.id} />;
+  return (
+    <AuctionDetail
+      auction={auction}
+      bids={bids}
+      userId={user?.id}
+      creditBalance={profile?.credits ?? 0}
+    />
+  );
 }
 
 function AuctionDetail({
   auction,
   bids,
   userId,
+  creditBalance,
 }: {
   auction: NonNullable<ReturnType<typeof useAuction>["auction"]>;
   bids: ReturnType<typeof useAuction>["bids"];
   userId?: string;
+  creditBalance: number;
 }) {
   const { timeLeft, isUrgent, isExpired } = useCountdown(auction.end_time);
   const isWinner = auction.current_winner_id === userId;
+  const { triggerReaction } = useReactionToast();
+
+  const [bidAmount, setBidAmount] = useState("");
 
   // Detect bidding war: check if 2 users have 3+ bids each in the last 60 seconds
   const now = Date.now();
@@ -47,6 +65,76 @@ function AuctionDetail({
   });
   const warParticipants = Object.values(bidderCounts).filter((c) => c >= 3);
   const isWarMode = warParticipants.length >= 2;
+
+  const didInitReactionRef = useRef(false);
+  const prevStatusRef = useRef(auction.status);
+  const prevWinnerRef = useRef(auction.current_winner_id);
+  const prevEndTimeRef = useRef(auction.end_time);
+  const prevBidCountRef = useRef(bids.length);
+  const prevWarModeRef = useRef(isWarMode);
+
+  useEffect(() => {
+    if (!didInitReactionRef.current) {
+      didInitReactionRef.current = true;
+      prevStatusRef.current = auction.status;
+      prevWinnerRef.current = auction.current_winner_id;
+      prevEndTimeRef.current = auction.end_time;
+      prevBidCountRef.current = bids.length;
+      prevWarModeRef.current = isWarMode;
+      return;
+    }
+
+    const prevStatus = prevStatusRef.current;
+    const prevWinner = prevWinnerRef.current;
+    const prevEndMs = new Date(prevEndTimeRef.current).getTime();
+    const currEndMs = new Date(auction.end_time).getTime();
+    const prevBidCount = prevBidCountRef.current;
+    const prevWarMode = prevWarModeRef.current;
+
+    let scenario: ReactionScenario | null = null;
+
+    if (prevStatus !== "closed" && auction.status === "closed") {
+      if (bids.length === 0) {
+        scenario = "zero_bid_close";
+      } else if (userId && auction.current_winner_id === userId) {
+        scenario = "win_auction";
+      } else if (userId && bids.some((b) => b.bidder_id === userId)) {
+        scenario = "lose_auction";
+      }
+    } else if (
+      userId &&
+      prevWinner === userId &&
+      auction.current_winner_id !== userId &&
+      auction.current_winner_id !== null &&
+      auction.status === "active"
+    ) {
+      scenario = "outbid";
+    } else if (!prevWarMode && isWarMode) {
+      scenario = "bidding_war";
+    } else if (auction.status === "active" && currEndMs - prevEndMs >= 25_000) {
+      scenario = "anti_snipe";
+    } else if (prevBidCount === 0 && bids.length === 1) {
+      scenario = "first_bid";
+    }
+
+    if (scenario) {
+      triggerReaction(scenario);
+    }
+
+    prevStatusRef.current = auction.status;
+    prevWinnerRef.current = auction.current_winner_id;
+    prevEndTimeRef.current = auction.end_time;
+    prevBidCountRef.current = bids.length;
+    prevWarModeRef.current = isWarMode;
+  }, [
+    auction.status,
+    auction.current_winner_id,
+    auction.end_time,
+    bids,
+    isWarMode,
+    triggerReaction,
+    userId,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -207,12 +295,25 @@ function AuctionDetail({
 
         {/* Sidebar */}
         <div className="space-y-4">
+          {auction.status === "active" && !isExpired && (
+            <BidSuggestions
+              bids={bids}
+              currentBid={auction.current_bid}
+              minBid={auction.min_bid}
+              endTime={auction.end_time}
+              warMode={isWarMode}
+              creditBalance={creditBalance}
+              onSelect={(n) => setBidAmount(String(n))}
+            />
+          )}
           <BidForm
             auctionId={auction.id}
             currentBid={auction.current_bid}
             minBid={auction.min_bid}
             status={auction.status}
             isExpired={isExpired}
+            amount={bidAmount}
+            onAmountChange={setBidAmount}
           />
         </div>
       </div>

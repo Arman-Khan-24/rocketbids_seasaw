@@ -229,11 +229,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Determine if this bid qualifies as a snipe BEFORE any end_time extension
+  const timeToEnd = endTime.getTime() - now.getTime();
+  const isSnipe = timeToEnd > 0 && timeToEnd <= ANTI_SNIPE_WINDOW_MS;
+
   // Insert the bid record
   const { error: bidError } = await serviceClient.from("bids").insert({
     auction_id,
     bidder_id: user.id,
     amount,
+    is_snipe: isSnipe,
   });
 
   if (bidError) {
@@ -250,8 +255,7 @@ export async function POST(request: NextRequest) {
   };
 
   // Anti-Snipe Timer: if bid in last 60s, extend by 30s
-  const timeToEnd = endTime.getTime() - now.getTime();
-  if (timeToEnd > 0 && timeToEnd <= ANTI_SNIPE_WINDOW_MS) {
+  if (isSnipe) {
     const newEndTime = new Date(endTime.getTime() + ANTI_SNIPE_EXTENSION_MS);
     updateData.end_time = newEndTime.toISOString();
   }

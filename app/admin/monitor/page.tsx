@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { Monitor, Crosshair, Swords, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { SniperAlert } from "@/components/admin/SniperAlert";
 import { PageLoader } from "@/components/ui/Spinner";
+import { useReactionToast } from "@/components/shared/ReactionToast";
 import { useCountdown } from "@/lib/hooks/useCountdown";
 import { formatDistanceToNow } from "@/lib/utils";
 import type { Auction } from "@/lib/hooks/useAuctions";
@@ -61,6 +62,9 @@ export default function AdminMonitor() {
   const [snipers, setSnipers] = useState<SniperData[]>([]);
   const [wars, setWars] = useState<WarState[]>([]);
   const [loading, setLoading] = useState(true);
+  const { triggerReaction } = useReactionToast();
+  const hasSniperHydratedRef = useRef(false);
+  const prevSniperIdsRef = useRef<Set<string>>(new Set());
   const supabase = useMemo(() => createClient(), []);
 
   const fetchData = useCallback(async () => {
@@ -83,22 +87,20 @@ export default function AdminMonitor() {
     setActiveAuctions(auctions);
     setRecentBids(bids);
 
-    // Detect snipers: users with 3+ bids in the last 60 seconds of any auction
+    // Detect snipers: users with 3+ bids flagged as snipes (is_snipe = true)
+    const { data: snipeBidsData } = await supabase
+      .from("bids")
+      .select("bidder_id, created_at")
+      .eq("is_snipe", true);
+
     const sniperMap: Record<string, { count: number; lastBid: string }> = {};
-    bids.forEach((bid) => {
-      const auction = auctions.find((a) => a.id === bid.auction_id);
-      if (!auction) return;
-      const endTime = new Date(auction.end_time).getTime();
-      const bidTime = new Date(bid.created_at).getTime();
-      const diff = endTime - bidTime;
-      if (diff >= 0 && diff <= 60000) {
-        if (!sniperMap[bid.bidder_id]) {
-          sniperMap[bid.bidder_id] = { count: 0, lastBid: bid.created_at };
-        }
-        sniperMap[bid.bidder_id].count++;
-        if (bid.created_at > sniperMap[bid.bidder_id].lastBid) {
-          sniperMap[bid.bidder_id].lastBid = bid.created_at;
-        }
+    ((snipeBidsData as { bidder_id: string; created_at: string }[]) ?? []).forEach((bid) => {
+      if (!sniperMap[bid.bidder_id]) {
+        sniperMap[bid.bidder_id] = { count: 0, lastBid: bid.created_at };
+      }
+      sniperMap[bid.bidder_id].count++;
+      if (bid.created_at > sniperMap[bid.bidder_id].lastBid) {
+        sniperMap[bid.bidder_id].lastBid = bid.created_at;
       }
     });
 
@@ -175,6 +177,26 @@ export default function AdminMonitor() {
       supabase.removeChannel(channel);
     };
   }, [fetchData, supabase]);
+
+  useEffect(() => {
+    const currentSniperIds = new Set(snipers.map((s) => s.userId));
+
+    if (!hasSniperHydratedRef.current) {
+      hasSniperHydratedRef.current = true;
+      prevSniperIdsRef.current = currentSniperIds;
+      return;
+    }
+
+    const hasNewSniper = Array.from(currentSniperIds).some(
+      (id) => !prevSniperIdsRef.current.has(id),
+    );
+
+    if (hasNewSniper) {
+      triggerReaction("sniper_flagged");
+    }
+
+    prevSniperIdsRef.current = currentSniperIds;
+  }, [snipers, triggerReaction]);
 
   if (loading) return <PageLoader />;
 
